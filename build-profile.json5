@@ -1,0 +1,49 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\Endy\\.ohos\\config\\default_hmos_cube_gi9g_NL3ebZq_MB4EaoE-MDHilCVpvpNv9tN3xdqiMI=.cer",
+          "storePassword": "0000001A35206713B5F335BCAA8B00BB7C4F8AC4ED40AEA5078BD82BE267650D087A3DCDFA31A9589D59",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001A6E01E001A096AE894A728449A029E7D42875D977BEEFE3C582068737EC89D9E5A774AA567F09",
+          "profile": "C:\\Users\\Endy\\.ohos\\config\\default_hmos_cube_gi9g_NL3ebZq_MB4EaoE-MDHilCVpvpNv9tN3xdqiMI=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\Endy\\.ohos\\config\\default_hmos_cube_gi9g_NL3ebZq_MB4EaoE-MDHilCVpvpNv9tN3xdqiMI=.p12"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.0(12)",
+        "runtimeOS": "HarmonyOS",
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

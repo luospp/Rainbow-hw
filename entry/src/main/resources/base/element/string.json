@@ -1,0 +1,19 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "蓝牙小助手"
+    },{
+      "name": "permission_reason",
+      "value": "请在此描述你使用蓝牙的理由"
+    }
+  ]
+}
