@@ -1,0 +1,169 @@
+{
+  "ohos-module-entry": {
+    "SELECT_TARGET": "default",
+    "MODULE_BUILD_DIR": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build",
+    "TARGETS": {
+      "default": {
+        "SOURCE_ROOT": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main",
+        "RESOURCES_PATH": [
+          "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/resources"
+        ],
+        "BUILD_PATH": {
+          "OUTPUT_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/outputs/default",
+          "INTERMEDIA_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates",
+          "JS_ASSETS_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/loader_out/default",
+          "JS_LITE_ASSETS_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/loader_out_lite/default",
+          "RES_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/res/default",
+          "RES_PROFILE_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/res/default/resources/base/profile",
+          "ETS_SUPER_VISUAL_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/cache/default/default@CompileArkTS/esmodule",
+          "JS_SUPER_VISUAL_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/cache/default/default@CompileJS/jsbundle",
+          "WORKER_LOADER": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/loader/default/loader.json",
+          "MANIFEST_JSON": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/manifest/default",
+          "OUTPUT_METADATA_JSON": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/hap_metadata/default/output_metadata.json",
+          "SOURCE_MAP_DIR": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/source_map/default"
+        },
+        "BUILD_OPTION": {
+          "debuggable": true
+        }
+      },
+      "ohosTest": {
+        "SOURCE_ROOT": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/ohosTest",
+        "RESOURCES_PATH": [
+          "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/ohosTest/resources"
+        ],
+        "BUILD_PATH": {
+          "OUTPUT_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/outputs/ohosTest",
+          "INTERMEDIA_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates",
+          "JS_ASSETS_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/loader_out/ohosTest",
+          "JS_LITE_ASSETS_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/loader_out_lite/ohosTest",
+          "RES_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/res/ohosTest",
+          "RES_PROFILE_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/res/ohosTest/resources/base/profile",
+          "ETS_SUPER_VISUAL_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/cache/ohosTest/ohosTest@OhosTestCompileArkTS/esmodule",
+          "JS_SUPER_VISUAL_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/cache/ohosTest/ohosTest@OhosTestCompileJS/jsbundle",
+          "WORKER_LOADER": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/loader/ohosTest/loader.json",
+          "MANIFEST_JSON": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/manifest/ohosTest",
+          "OUTPUT_METADATA_JSON": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/hap_metadata/ohosTest/output_metadata.json",
+          "SOURCE_MAP_DIR": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build/default/intermediates/source_map/ohosTest"
+        },
+        "BUILD_OPTION": {
+          "debuggable": true
+        }
+      }
+    },
+    "BUILD_OPTION": {
+      "default-default": {
+        "debuggable": true,
+        "copyFrom": "default",
+        "name": "debug"
+      }
+    },
+    "BUILD_PROFILE_OPT": {
+      "apiType": "stageMode",
+      "buildOption": {},
+      "buildOptionSet": [
+        {
+          "name": "release",
+          "arkOptions": {}
+        },
+        {
+          "name": "default"
+        },
+        {
+          "name": "debug"
+        }
+      ],
+      "targets": [
+        {
+          "name": "default"
+        },
+        {
+          "name": "ohosTest"
+        }
+      ]
+    },
+    "BUILD_CACHE_DIR": ""
+  },
+  "ohos-project": {
+    "SELECT_PRODUCT_NAME": "default",
+    "MODULE_BUILD_DIR": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/build",
+    "BUNDLE_NAME": "com.amdm.newble",
+    "BUILD_PATH": {
+      "OUTPUT_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/build/outputs/default"
+    },
+    "MODULES": [
+      {
+        "name": "entry",
+        "srcPath": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry",
+        "targets": [
+          {
+            "name": "default",
+            "applyToProducts": [
+              "default"
+            ]
+          }
+        ],
+        "belongProjectPath": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper"
+      }
+    ],
+    "PROFILE_OPT": {
+      "app": {
+        "products": [
+          {
+            "name": "default",
+            "signingConfig": "default",
+            "targetSdkVersion": "5.1.0(18)",
+            "compatibleSdkVersion": "5.0.0(12)",
+            "runtimeOS": "HarmonyOS"
+          }
+        ],
+        "buildModeSet": [
+          {
+            "name": "debug"
+          },
+          {
+            "name": "release"
+          }
+        ],
+        "signingConfigs": [
+          {
+            "name": "default",
+            "type": "HarmonyOS",
+            "material": {
+              "certpath": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.cer",
+              "keyAlias": "debugKey",
+              "keyPassword": "0000001BC968BA774C5ABA24AAF04200E12DB6BF53C133838B9E16302DDFF73DAFA45294D13854CB4A7424",
+              "profile": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.p7b",
+              "signAlg": "SHA256withECDSA",
+              "storeFile": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.p12",
+              "storePassword": "0000001BDC41E12435D6DC8F6D8A8E9B7A2A6637613AFCFDB7DDDA9E94807CC398514D945281D89BE8D2A8"
+            }
+          }
+        ]
+      },
+      "modules": [
+        {
+          "name": "entry",
+          "srcPath": "./entry",
+          "targets": [
+            {
+              "name": "default",
+              "applyToProducts": [
+                "default"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "CONFIG_PROPERTIES": {
+      "enableSignTask": true,
+      "skipNativeIncremental": false,
+      "hvigor.keepDependency": true
+    },
+    "OVERALL_PROJECT_PATHS": [
+      "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper"
+    ],
+    "BUILD_CACHE_DIR": ""
+  },
+  "version": 1
+}

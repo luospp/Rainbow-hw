@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "com.endy.blehelper",
+    "bundleName": "com.amdm.newble",
     "vendor": "example",
     "versionCode": 1,
     "versionName": "1.0.0",

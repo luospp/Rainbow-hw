@@ -1,34 +1,35 @@
 {
   "app": {
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "5.1.0(18)",
+        "compatibleSdkVersion": "5.0.0(12)",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ],
     "signingConfigs": [
       {
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\Endy\\.ohos\\config\\default_hmos_cube_gi9g_NL3ebZq_MB4EaoE-MDHilCVpvpNv9tN3xdqiMI=.cer",
-          "storePassword": "0000001A35206713B5F335BCAA8B00BB7C4F8AC4ED40AEA5078BD82BE267650D087A3DCDFA31A9589D59",
+          "certpath": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001A6E01E001A096AE894A728449A029E7D42875D977BEEFE3C582068737EC89D9E5A774AA567F09",
-          "profile": "C:\\Users\\Endy\\.ohos\\config\\default_hmos_cube_gi9g_NL3ebZq_MB4EaoE-MDHilCVpvpNv9tN3xdqiMI=.p7b",
+          "keyPassword": "0000001BC968BA774C5ABA24AAF04200E12DB6BF53C133838B9E16302DDFF73DAFA45294D13854CB4A7424",
+          "profile": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\Endy\\.ohos\\config\\default_hmos_cube_gi9g_NL3ebZq_MB4EaoE-MDHilCVpvpNv9tN3xdqiMI=.p12"
+          "storeFile": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.p12",
+          "storePassword": "0000001BDC41E12435D6DC8F6D8A8E9B7A2A6637613AFCFDB7DDDA9E94807CC398514D945281D89BE8D2A8"
         }
-      }
-    ],
-    "products": [
-      {
-        "name": "default",
-        "signingConfig": "default",
-        "compatibleSdkVersion": "5.0.0(12)",
-        "runtimeOS": "HarmonyOS",
-      }
-    ],
-    "buildModeSet": [
-      {
-        "name": "debug",
-      },
-      {
-        "name": "release"
       }
     ]
   },

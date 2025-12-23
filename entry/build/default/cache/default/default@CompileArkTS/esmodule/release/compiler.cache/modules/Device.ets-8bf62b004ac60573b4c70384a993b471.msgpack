@@ -1,0 +1,608 @@
+Ôr@Ÿªassertions¤code´customTransformCache¬dependencies¢id¤meta±moduleSideEffects¬originalCode±originalSourcemap«resolvedIds®sourcemapChainµsyntheticNamedExportsµtransformDependencies®transformFiles¨cacheAstÔrAÚEBif (!("finalizeConstruction" in ViewPU.prototype)) {
+    Reflect.set(ViewPU.prototype, "finalizeConstruction", () => { });
+}
+import router from "@ohos.router";
+import { connectToDevice, disconnectDevice, getShortUUID, readCharacteristic, subscribeCharacteristic, writeCharacteristic } from '../ble/helper';
+import { BleWriteDialog } from '../dialogs/BleWriteDialog';
+class Device extends ViewPU {
+    constructor(parent, params, __localStorage, elmtId = -1, paramsLambda = undefined, extraInfo) {
+        super(parent, __localStorage, elmtId, extraInfo);
+        if (typeof paramsLambda === "function") {
+            this.paramsGenerator_ = paramsLambda;
+        }
+        this.__bleName = new ObservedPropertySimplePU("Gi888888", this, "bleName");
+        this.__macAddress = new ObservedPropertySimplePU("00:00:00:00:00:00", this, "macAddress");
+        this.__deviceLog = new ObservedPropertySimplePU("", this, "deviceLog");
+        this.__serviceList = new ObservedPropertyObjectPU([]
+        // åœ¨ç¼–å†™ç•Œé¢çš„æ—¶å€™ï¼Œå¯ä»¥è§£å¼€è¿™ä¸€æ®µè°ƒè¯•ç•Œé¢æ ·å¼
+        // @State serviceList: BleService[] = [{
+        //     uuid: "AAAA",
+        //     characteristicList: [{
+        //         uuid: "BBBB",
+        //         read: true,
+        //         notify: true,
+        //         write: true
+        //     }, { uuid: "CCCC", write: true }]
+        // }, {
+        //     uuid: "AAAA",
+        //     characteristicList: [{ uuid: "BBBB", read: true, notify: true }, { uuid: "CCCC", write: true }]
+        // }, {
+        //     uuid: "AAAA",
+        //     characteristicList: [{ uuid: "BBBB", read: true, notify: true }, { uuid: "CCCC", write: true }]
+        // }, {
+        //     uuid: "AAAA",
+        //     characteristicList: [{ uuid: "BBBB", read: true, notify: true }, { uuid: "CCCC", write: true }]
+        // }]
+        , this, "serviceList");
+        this.characteristicReadyToWrite = "";
+        this.bleWriteDialogController = new CustomDialogController({
+            builder: () => {
+                let jsDialog = new BleWriteDialog(this, {
+                    confirm: (sentValue) => {
+                        this.onBleWriteDialogConfirm(sentValue);
+                    }
+                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Device.ets", line: 63, col: 18 });
+                jsDialog.setController(this.bleWriteDialogController);
+                ViewPU.create(jsDialog);
+                let paramsLambda = () => {
+                    return {
+                        confirm: (sentValue) => {
+                            this.onBleWriteDialogConfirm(sentValue);
+                        }
+                    };
+                };
+                jsDialog.paramsGenerator_ = paramsLambda;
+            },
+            alignment: DialogAlignment.Bottom
+        }, this);
+        this.setInitiallyProvidedValue(params);
+        this.finalizeConstruction();
+    }
+    setInitiallyProvidedValue(params) {
+        if (params.bleName !== undefined) {
+            this.bleName = params.bleName;
+        }
+        if (params.macAddress !== undefined) {
+            this.macAddress = params.macAddress;
+        }
+        if (params.deviceLog !== undefined) {
+            this.deviceLog = params.deviceLog;
+        }
+        if (params.serviceList !== undefined) {
+            this.serviceList = params.serviceList;
+        }
+        if (params.characteristicReadyToWrite !== undefined) {
+            this.characteristicReadyToWrite = params.characteristicReadyToWrite;
+        }
+        if (params.bleWriteDialogController !== undefined) {
+            this.bleWriteDialogController = params.bleWriteDialogController;
+        }
+    }
+    updateStateVars(params) {
+    }
+    purgeVariableDependenciesOnElmtId(rmElmtId) {
+        this.__bleName.purgeDependencyOnElmtId(rmElmtId);
+        this.__macAddress.purgeDependencyOnElmtId(rmElmtId);
+        this.__deviceLog.purgeDependencyOnElmtId(rmElmtId);
+        this.__serviceList.purgeDependencyOnElmtId(rmElmtId);
+    }
+    aboutToBeDeleted() {
+        this.__bleName.aboutToBeDeleted();
+        this.__macAddress.aboutToBeDeleted();
+        this.__deviceLog.aboutToBeDeleted();
+        this.__serviceList.aboutToBeDeleted();
+        SubscriberManager.Get().delete(this.id__());
+        this.aboutToBeDeletedInternal();
+    }
+    get bleName() {
+        return this.__bleName.get();
+    }
+    set bleName(newValue) {
+        this.__bleName.set(newValue);
+    }
+    get macAddress() {
+        return this.__macAddress.get();
+    }
+    set macAddress(newValue) {
+        this.__macAddress.set(newValue);
+    }
+    get deviceLog() {
+        return this.__deviceLog.get();
+    }
+    set deviceLog(newValue) {
+        this.__deviceLog.set(newValue);
+    }
+    get serviceList() {
+        return this.__serviceList.get();
+    }
+    set serviceList(newValue) {
+        this.__serviceList.set(newValue);
+    }
+    onBleWriteDialogConfirm(sentValue) {
+        // console.log(sentValue)
+        this.writeBle(this.characteristicReadyToWrite, sentValue);
+    }
+    appendLog(logText) {
+        this.deviceLog = logText + "\n" + this.deviceLog;
+    }
+    aboutToAppear() {
+        this.bleName = router.getParams()?.name || this.bleName;
+        this.macAddress = router.getParams()?.macAddress || this.macAddress;
+        connectToDevice(this.macAddress, () => {
+            this.appendLog(`${this.bleName} connected`);
+        }, () => {
+            //æ–­å¼€è¿”å›
+            this.onBackPress();
+        }, (serviceList) => {
+            this.serviceList = [];
+            serviceList.forEach(service => {
+                let serviceItem = { uuid: getShortUUID(service.serviceUuid), characteristicList: [] };
+                service.characteristics.forEach(characteristic => {
+                    let properties = characteristic.properties;
+                    let characteristicItem = {
+                        uuid: getShortUUID(characteristic.characteristicUuid),
+                        write: properties?.write || properties?.writeNoResponse,
+                        read: properties?.read,
+                        notify: properties?.notify
+                    };
+                    serviceItem.characteristicList.push(characteristicItem);
+                });
+                this.serviceList.push(serviceItem);
+            });
+        }, (shortUUID, characteristicValue) => {
+            this.appendLog(`${shortUUID} notify: ${characteristicValue}`);
+        });
+    }
+    aboutToDisappear() {
+        disconnectDevice();
+    }
+    onBackPress() {
+        router.back({
+            url: 'pages/Index'
+        });
+        return true;
+    }
+    serviceHead(text, parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(text);
+            Text.width("100%");
+            Text.backgroundColor("#ff5f74ff");
+            Text.padding(10);
+            Text.borderRadius(5);
+            Text.fontColor(Color.White);
+        }, Text);
+        Text.pop();
+    }
+    writeBle(shortUUID, writeValue) {
+        this.appendLog(`write ${shortUUID}: ${writeValue}`);
+        writeCharacteristic(shortUUID, writeValue);
+    }
+    async readBle(shortUUID) {
+        let result = await readCharacteristic(shortUUID);
+        this.appendLog(`read ${shortUUID}: ${result}`);
+    }
+    subscribeBle(shortUUID) {
+        this.appendLog(`subscribe ${shortUUID}`);
+        subscribeCharacteristic(shortUUID);
+    }
+    initialRender() {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.height('100%');
+            Column.width('100%');
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.padding({ left: 15, right: 15 });
+            Row.width("100%");
+            Row.height("10%");
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(this.bleName);
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Blank.create();
+        }, Blank);
+        Blank.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(this.macAddress);
+        }, Text);
+        Text.pop();
+        Row.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            List.create({ space: 10 });
+            List.padding({ left: 10, right: 10 });
+            List.width("100%");
+            List.height("50%");
+        }, List);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            ForEach.create();
+            const forEachItemGenFunction = _item => {
+                const service = _item;
+                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                    ListItemGroup.create({ header: this.serviceHead.bind(this, service.uuid) });
+                    ListItemGroup.divider({
+                        strokeWidth: 1,
+                        color: Color.Gray,
+                        startMargin: 10,
+                        endMargin: 10
+                    });
+                }, ListItemGroup);
+                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                    ForEach.create();
+                    const forEachItemGenFunction = _item => {
+                        const characteristic = _item;
+                        {
+                            const itemCreation = (elmtId, isInitialRender) => {
+                                ViewStackProcessor.StartGetAccessRecordingFor(elmtId);
+                                ListItem.create(deepRenderFunction, true);
+                                if (!isInitialRender) {
+                                    ListItem.pop();
+                                }
+                                ViewStackProcessor.StopGetAccessRecording();
+                            };
+                            const itemCreation2 = (elmtId, isInitialRender) => {
+                                ListItem.create(deepRenderFunction, true);
+                                ListItem.width("100%");
+                            };
+                            const deepRenderFunction = (elmtId, isInitialRender) => {
+                                itemCreation(elmtId, isInitialRender);
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    Row.create();
+                                    Row.width("90%");
+                                    Row.padding(8);
+                                }, Row);
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    Text.create(characteristic.uuid);
+                                }, Text);
+                                Text.pop();
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    Blank.create();
+                                }, Blank);
+                                Blank.pop();
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    Flex.create({
+                                        direction: FlexDirection.Row,
+                                        alignItems: ItemAlign.Auto,
+                                        justifyContent: FlexAlign.SpaceAround
+                                    });
+                                    Flex.width("50%");
+                                }, Flex);
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    If.create();
+                                    if (characteristic.write) {
+                                        this.ifElseBranchUpdateFunction(0, () => {
+                                            this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                                Button.createWithLabel("å†™", { type: ButtonType.Circle });
+                                                Button.fontSize(13);
+                                                Button.padding(5);
+                                                Button.onClick(() => {
+                                                    this.characteristicReadyToWrite = characteristic.uuid;
+                                                    this.bleWriteDialogController.open();
+                                                });
+                                            }, Button);
+                                            Button.pop();
+                                        });
+                                    }
+                                    else {
+                                        this.ifElseBranchUpdateFunction(1, () => {
+                                        });
+                                    }
+                                }, If);
+                                If.pop();
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    If.create();
+                                    if (characteristic.read) {
+                                        this.ifElseBranchUpdateFunction(0, () => {
+                                            this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                                Button.createWithLabel("è¯»", { type: ButtonType.Circle });
+                                                Button.fontSize(13);
+                                                Button.padding(5);
+                                                Button.onClick(async () => {
+                                                    await this.readBle(characteristic.uuid);
+                                                });
+                                            }, Button);
+                                            Button.pop();
+                                        });
+                                    }
+                                    else {
+                                        this.ifElseBranchUpdateFunction(1, () => {
+                                        });
+                                    }
+                                }, If);
+                                If.pop();
+                                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                    If.create();
+                                    if (characteristic.notify) {
+                                        this.ifElseBranchUpdateFunction(0, () => {
+                                            this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                                Button.createWithLabel("é€š", { type: ButtonType.Circle });
+                                                Button.fontSize(13);
+                                                Button.padding(5);
+                                                Button.onClick(() => {
+                                                    this.subscribeBle(characteristic.uuid);
+                                                });
+                                            }, Button);
+                                            Button.pop();
+                                        });
+                                    }
+                                    else {
+                                        this.ifElseBranchUpdateFunction(1, () => {
+                                        });
+                                    }
+                                }, If);
+                                If.pop();
+                                Flex.pop();
+                                Row.pop();
+                                ListItem.pop();
+                            };
+                            this.observeComponentCreation2(itemCreation2, ListItem);
+                            ListItem.pop();
+                        }
+                    };
+                    this.forEachUpdateFunction(elmtId, service.characteristicList, forEachItemGenFunction);
+                }, ForEach);
+                ForEach.pop();
+                ListItemGroup.pop();
+            };
+            this.forEachUpdateFunction(elmtId, this.serviceList, forEachItemGenFunction);
+        }, ForEach);
+        ForEach.pop();
+        List.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Blank.create();
+        }, Blank);
+        Blank.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            TextArea.create({ text: this.deviceLog });
+            TextArea.padding(10);
+            TextArea.width("100%");
+            TextArea.height('30%');
+            TextArea.backgroundColor(Color.Transparent);
+        }, TextArea);
+        Column.pop();
+    }
+    rerender() {
+        this.updateDirtyElements();
+    }
+    static getEntryName() {
+        return "Device";
+    }
+}
+registerNamedRoute(() => new Device(undefined, {}), "", { bundleName: "com.endy.blehelper", moduleName: "entry", pagePath: "pages/Device", pageFullPath: "entry/src/main/ets/pages/Device", integratedHsp: "false", moduleType: "followWithHap" });
+//# sourceMappingURL=Device.js.mapÂ“Ùi hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.router.d.tsÙW/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/ets/ble/helper.tsÙd/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/ets/dialogs/BleWriteDialog.etsÙZ/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/ets/pages/Device.etsÔrB›ªmoduleName±isLocalDependency¯isNodeEntryFile§pkgPath±belongProjectPath§pkgNameªpkgVersion±dependencyPkgInfo°belongModulePath§checker¬shouldEmitJs¥entryÃÂÙ</Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entryÙ6/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper¥entry¥1.0.0Ô  Ù</Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entryÔrCÜ ®¬getNodeCount²getIdentifierCount®getSymbolCount¬getTypeCountµgetInstantiationCountµgetRelationCacheSizes±isUndefinedSymbol±isArgumentsSymbol¯isUnknownSymbol¯getMergedSymbol®getDiagnostics´getGlobalDiagnostics´getRecursionIdentity¶getUnmatchedProperties¹getTypeOfSymbolAtLocation¯getTypeOfSymbolÙ(getSymbolsOfParameterPropertyDeclaration·getDeclaredTypeOfSymbol³getPropertiesOfType±getPropertyOfTypeÙ"getPrivateIdentifierPropertyOfType·getTypeOfPropertyOfType²getIndexInfoOfType³getIndexInfosOfTypeºgetIndexInfosOfIndexSymbol³getSignaturesOfType²getIndexTypeOfType¬getIndexType¬getBaseTypes¸getBaseTypeOfLiteralType®getWidenedType³getTypeFromTypeNode°getParameterTypeÙ$getParameterIdentifierNameAtPosition¸getPromisedTypeOfPromise®getAwaitedType¸getReturnTypeOfSignature®isNullableType¯getNullableType²getNonNullableType²getNonOptionalType°getTypeArguments®typeToTypeNodeÙ$indexInfoToIndexSignatureDeclaration¿signatureToSignatureDeclaration²symbolToEntityName²symbolToExpression¬symbolToNodeÙ!symbolToTypeParameterDeclarations¼symbolToParameterDeclarationºtypeParameterToDeclaration±getSymbolsInScope³getSymbolAtLocation·getIndexInfosAtLocationÙ!getShorthandAssignmentValueSymbolÙ#getExportSpecifierLocalTargetSymbol·getExportSymbolOfSymbol±getTypeAtLocationÙ tryGetTypeAtLocationWithoutCheckºgetTypeOfAssignmentPatternÙ*getPropertySymbolOfDestructuringAssignment±signatureToString¬typeToString®symbolToStringµtypePredicateToString®writeSignature©writeType«writeSymbol²writeTypePredicate¼getAugmentedPropertiesOfType®getRootSymbols²getSymbolOfExpando±getContextualTypeÙ(getContextualTypeForObjectLiteralElementÙ#getContextualTypeForArgumentAtIndexÙ getContextualTypeForJsxAttribute²isContextSensitiveÙ!getTypeOfPropertyOfContextualTypeµgetFullyQualifiedNameÙ#tryGetResolvedSignatureWithoutCheck´getResolvedSignatureÙ/getResolvedSignatureForStringLiteralCompletionsÙ$getResolvedSignatureForSignatureHelpµgetExpandedParameters¹hasEffectiveRestParameterºcontainsArgumentsReference°getConstantValueµisValidPropertyAccessÙ#isValidPropertyAccessForCompletions»getSignatureFromDeclarationºisImplementationOfOverload¹getImmediateAliasedSymbol°getAliasedSymbol¯getEmitResolver²getExportsOfModule¿getExportsAndPropertiesOfModuleÙ forEachExportAndPropertyOfModule¯getSymbolWalker±getAmbientModules¹getJsxIntrinsicTagNamesAt³isOptionalParameter»tryGetMemberInModuleExportsÙ(tryGetMemberInModuleExportsAndProperties´tryFindAmbientModuleÙ(tryFindAmbientModuleWithoutAugmentations¯getApparentType¬getUnionType²isTypeAssignableTo³createAnonymousType¯createSignature¬createSymbol¯createIndexInfoªgetAnyType­getStringType­getNumberType±createPromiseType¯createArrayType¹getElementTypeOfArrayType®getBooleanType¬getFalseType«getTrueType«getVoidType°getUndefinedType«getNullType¯getESSymbolType¬getNeverType¯getOptionalType®getPromiseType²getPromiseLikeType´getAsyncIterableType²isSymbolAccessible«isArrayType«isTupleType¯isArrayLikeTypeÙ#isTypeInvalidDueToUnionDiscriminantºgetExactOptionalProperties¿getAllPossiblePropertiesOfTypesÙ(getSuggestedSymbolForNonexistentPropertyÙ#getSuggestionForNonexistentPropertyÙ,getSuggestedSymbolForNonexistentJSXAttributeÙ&getSuggestedSymbolForNonexistentSymbolÙ!getSuggestionForNonexistentSymbolÙ&getSuggestedSymbolForNonexistentModuleÙ!getSuggestionForNonexistentExportÙ+getSuggestedSymbolForNonexistentClassMember·getBaseConstraintOfType»getDefaultFromTypeParameter«resolveName¯getJsxNamespaceµgetJsxFragmentFactory¸getAccessibleSymbolChain»getTypePredicateOfSignature¹resolveExternalModuleName»resolveExternalModuleSymbol°tryGetThisTypeAt¹getTypeArgumentConstraint¸getSuggestionDiagnostics¸runWithCancellationTokenÙ3getLocalTypeParametersOfClassOrInterfaceOrTypeAlias´isDeclarationVisible´isPropertyAccessible»getTypeOnlyAliasDeclaration¿getMemberOverrideModifierStatusÙ!isTypeParameterPossiblyReferenced²getConstEnumRelate´clearConstEnumRelateµdeleteConstEnumRelateÙ$getTypeArgumentsForResolvedSignatureµgetCheckedSourceFilesÙ"collectHaveTsNoCheckFilesForLinter·clearQualifiedNameCache®isStaticRecord²isStaticSourceFile³createIntrinsicTypeÔ  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  ÃÃÚRimport { router } from '@kit.ArkUI'
+import { ble } from '@kit.ConnectivityKit'
+import {
+    BleDevice,
+    connectToDevice,
+    disconnectDevice,
+    getShortUUID,
+    readCharacteristic,
+    subscribeCharacteristic,
+    writeCharacteristic
+} from '../ble/helper'
+import { BleWriteDialog } from '../dialogs/BleWriteDialog'
+
+interface BleService {
+    uuid: string
+    characteristicList: BleCharacteristic[]
+}
+
+interface BleCharacteristic {
+    uuid: string
+    write?: boolean
+    notify?: boolean
+    read?: boolean
+}
+
+@Entry
+@Component
+struct Device {
+    @State bleName: string = "Gi888888"
+    @State macAddress: string = "00:00:00:00:00:00"
+    @State deviceLog: string = ""
+    @State serviceList: BleService[]=[]
+
+    // åœ¨ç¼–å†™ç•Œé¢çš„æ—¶å€™ï¼Œå¯ä»¥è§£å¼€è¿™ä¸€æ®µè°ƒè¯•ç•Œé¢æ ·å¼
+    // @State serviceList: BleService[] = [{
+    //     uuid: "AAAA",
+    //     characteristicList: [{
+    //         uuid: "BBBB",
+    //         read: true,
+    //         notify: true,
+    //         write: true
+    //     }, { uuid: "CCCC", write: true }]
+    // }, {
+    //     uuid: "AAAA",
+    //     characteristicList: [{ uuid: "BBBB", read: true, notify: true }, { uuid: "CCCC", write: true }]
+    // }, {
+    //     uuid: "AAAA",
+    //     characteristicList: [{ uuid: "BBBB", read: true, notify: true }, { uuid: "CCCC", write: true }]
+    // }, {
+    //     uuid: "AAAA",
+    //     characteristicList: [{ uuid: "BBBB", read: true, notify: true }, { uuid: "CCCC", write: true }]
+    // }]
+
+
+    private characteristicReadyToWrite: string = ""
+
+    onBleWriteDialogConfirm(sentValue: string) {
+        // console.log(sentValue)
+        this.writeBle(this.characteristicReadyToWrite, sentValue)
+    }
+
+    bleWriteDialogController: CustomDialogController = new CustomDialogController({
+        builder: BleWriteDialog({
+            confirm: (sentValue: string) => {
+                this.onBleWriteDialogConfirm(sentValue)
+            }
+        }),
+        alignment: DialogAlignment.Bottom
+    })
+
+    appendLog(logText: string) {
+        this.deviceLog = logText + "\n" + this.deviceLog
+    }
+
+    aboutToAppear(): void {
+        this.bleName = (router.getParams() as BleDevice)?.name || this.bleName
+        this.macAddress = (router.getParams() as BleDevice)?.macAddress || this.macAddress
+
+        connectToDevice(this.macAddress, () => {
+            this.appendLog(`${this.bleName} connected`)
+        }, () => {
+            //æ–­å¼€è¿”å›
+            this.onBackPress()
+        }, (serviceList: Array<ble.GattService>) => {
+            this.serviceList = []
+            serviceList.forEach(service => {
+                let serviceItem: BleService = { uuid: getShortUUID(service.serviceUuid), characteristicList: [] }
+                service.characteristics.forEach(characteristic => {
+                    let properties = characteristic.properties
+                    let characteristicItem: BleCharacteristic =
+                        {
+                            uuid: getShortUUID(characteristic.characteristicUuid),
+                            write: properties?.write || properties?.writeNoResponse,
+                            read: properties?.read,
+                            notify: properties?.notify
+                        }
+                    serviceItem.characteristicList.push(characteristicItem)
+                })
+                this.serviceList.push(serviceItem)
+            })
+        }, (shortUUID: string, characteristicValue: string) => {
+            this.appendLog(`${shortUUID} notify: ${characteristicValue}`)
+        })
+    }
+
+    aboutToDisappear() {
+        disconnectDevice()
+    }
+
+    onBackPress(): boolean | void {
+        router.back({
+            url: 'pages/Index'
+        })
+        return true
+    }
+
+    @Builder
+    serviceHead(text: string) {
+        Text(text)
+            .width("100%")
+            .backgroundColor("#ff5f74ff")
+            .padding(10)
+            .borderRadius(5)
+            .fontColor(Color.White)
+    }
+
+    writeBle(shortUUID: string, writeValue: string) {
+        this.appendLog(`write ${shortUUID}: ${writeValue}`)
+        writeCharacteristic(shortUUID, writeValue)
+    }
+
+   async  readBle(shortUUID: string) {
+        let result =await  readCharacteristic(shortUUID)
+        this.appendLog(`read ${shortUUID}: ${result}`)
+    }
+
+    subscribeBle(shortUUID: string) {
+        this.appendLog(`subscribe ${shortUUID}`)
+        subscribeCharacteristic(shortUUID)
+    }
+
+    build() {
+        Column() {
+            Row() {
+                Text(this.bleName)
+                Blank()
+                Text(this.macAddress)
+            }
+            .padding({ left: 15, right: 15 })
+            .width("100%")
+            .height("10%")
+
+            List({ space: 10 }) {
+                ForEach(this.serviceList, (service: BleService) => {
+                    ListItemGroup({ header: this.serviceHead(service.uuid) }) {
+                        ForEach(service.characteristicList, (characteristic: BleCharacteristic) => {
+                            ListItem() {
+                                Row() {
+                                    Text(characteristic.uuid)
+                                    Blank()
+                                    Flex({
+                                        direction: FlexDirection.Row,
+                                        alignItems: ItemAlign.Auto,
+                                        justifyContent: FlexAlign.SpaceAround
+                                    }) {
+                                        if (characteristic.write) {
+                                            Button("å†™", { type: ButtonType.Circle })
+                                                .fontSize(13)
+                                                .padding(5)
+                                                .onClick(() => {
+                                                    this.characteristicReadyToWrite = characteristic.uuid
+                                                    this.bleWriteDialogController.open()
+                                                })
+                                        }
+                                        if (characteristic.read) {
+                                            Button("è¯»", { type: ButtonType.Circle })
+                                                .fontSize(13)
+                                                .padding(5)
+                                                .onClick(async() => {
+                                                    await this.readBle(characteristic.uuid)
+                                                })
+                                        }
+                                        if (characteristic.notify) {
+                                            Button("é€š", { type: ButtonType.Circle })
+                                                .fontSize(13)
+                                                .padding(5)
+                                                .onClick(() => {
+                                                    this.subscribeBle(characteristic.uuid)
+                                                })
+                                        }
+
+                                    }.width("50%")
+                                }.width("90%").padding(8)
+                            }.width("100%")
+                        }
+                        )
+                    }
+                    .divider({
+                        strokeWidth: 1,
+                        color: Color.Gray,
+                        startMargin: 10,
+                        endMargin: 10
+                    })
+                })
+            }.padding({ left: 10, right: 10 })
+            .width("100%")
+            .height("50%")
+
+            Blank()
+
+            TextArea({ text: this.deviceLog })
+                .padding(10)
+                .width("100%")
+                .height('30%')
+                .backgroundColor(Color.Transparent)
+        }
+        .height('100%')
+        .width('100%')
+    }
+}ÀÔrD“¬@ohos.router­../ble/helper¹../dialogs/BleWriteDialogÔrE—ªassertions¨external¢id¤meta±moduleSideEffectsªresolvedByµsyntheticNamedExportsAÃÙi hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.router.d.tsAÃªoh-resolveÂEAÂÙW/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/ets/ble/helper.tsAÃªoh-resolveÂEAÂÙd/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/ets/dialogs/BleWriteDialog.etsAÃªoh-resolveÂ“ÔrF–§version¤fileªsourceRoot§sources¥names¨mappings©Device.js ‘ªDevice.etsÜm–”    ”  	”  ”  ”!  #”"  #Ü ”   ” ”	 ” ” ”* ”, ”8 ”: ”ÌL ”ÌN ”Ìe ”Ìg 	”Ìz 	”Ì| 
+”Ì‚ 
+”Ì‘ 
+”Ì’ 
+˜”   ” ”	 	” ” ” ”: :”; :’” ” ‘”  ’”6 ”Ì@ '’”9  ”ÌL 3’”8 ”: !’”: %”< '’” !”! !’” "”0 ",’” #” #’” $”% $!’” %”  %’” &” &’” '”  '’” (” (’” )”0 ),’” *” *’” +” +’” ,”Ìn ,Ìj’” -” -’” .” .’” /”Ìn /Ìj’” 0” 0’” 1” 1’” 2”Ìn 2Ìj’” 3” 3	’”* 61”, 63’”, =;”ÌB =ÌQ’” >” >“”# >”1 >”8 > —” ?” ?” ?” ?”' ?'”) ?)”+ ?+˜” Ì@” Ì@” Ì@”4 Ì@,”5 Ì@-”> Ì@6”? Ì@7”Ì@ Ì@7’” ÌA” ÌA‘” ÌB	’”, =”ÌD =—” ?” ?”! ?”" ?”+ ?'”- ?)”/ ?+˜” Ì@”  Ì@”! Ì@”8 Ì@,”9 Ì@-”ÌB Ì@6”ÌC Ì@7”ÌD Ì@7’” ÌA” ÌA‘” ÌB
+–” ÌC” ÌC” ÌC”& ÌC"”' ÌC#”- ÌC)‘” ’” ” ’” ” ’” ” ’” ” ’” ” ’” ” ’” ” ’” ” ”” 8” 8” 8”% 8-’” 9”! 9!œ” :” :” :” :” :” :” :”5 :5”7 :7”Ì@ :Ì@”ÌA :ÌA”ÌB :ÌA’” ;” ;”” ÌF” ÌF” ÌF” ÌF” ÌG” ÌG” ÌG” ÌG” ÌG”  ÌG ”# ÌG#”' ÌG'”* ÌG*”. ÌG.”/ ÌG/”8 ÌG8”9 ÌG8’” ÌH” ÌH’” ÌJ” ÌJÜ ” ÌK” ÌK” ÌK” ÌK” ÌK” ÌK” ÌK”' ÌK(”) ÌK8”+ ÌK:”/ ÌK>”3 ÌKÌB”7 ÌKÌF”8 ÌKÌG”? ÌKÌN”Ì@ ÌKÌNÜ ” ÌL” ÌL” ÌL” ÌL” ÌL”  ÌL!”! ÌL"”* ÌL+”, ÌL;”. ÌL=”8 ÌLÌG”< ÌLÌK”Ì@ ÌLÌO”ÌA ÌLÌP”ÌK ÌLÌZ”ÌL ÌLÌZ™” ÌN” ÌN” ÌN” ÌN” ÌN”' ÌN'”) ÌN)”, ÌN,”. ÌN.œ” ÌO” ÌO” ÌO” ÌO” ÌO” ÌO”" ÌO"”# ÌO#”* ÌO*”6 ÌO6”7 ÌO7”8 ÌO7•” ÌP”	 ÌP	” ÌP” ÌP” ÌP’” ÌQ” ÌQ–” ÌR” ÌR” ÌR” ÌR” ÌR” ÌR—” ÌS”	 ÌS	” ÌS” ÌS” ÌS/” ÌS1” ÌS3—” ÌT” ÌT” ÌT” ÌT” ÌT”! ÌT!”" ÌT!˜” ÌU” ÌU” ÌU” ÌU”  ÌU ”' ÌU'”( ÌU(”* ÌU*Ü ” ÌV” ÌV” ÌV”" ÌV.”$ ÌV0”( ÌV4”* ÌV6”6 ÌVÌB”7 ÌVÌC”> ÌVÌJ”? ÌVÌK”ÌJ ÌVÌV”ÌK ÌVÌW”ÌM ÌVÌY”Ì_ ÌVÌk”Ìa ÌVÌm”Ìc ÌVÌo”Ìe ÌVÌq”Ìf ÌVÌqš” ÌW” ÌW” ÌW”' ÌW'”( ÌW(”/ ÌW/”0 ÌW0”> ÌW>”? ÌW?”ÌA ÌWÌA˜” ÌX” ÌX”" ÌX"”% ÌX%”3 ÌX3”4 ÌX4”> ÌX>”? ÌX>”” ÌY” ÌY”* ÌY*”- ÌZ™” Ì[” Ì[ ” Ì["”* Ì[.”+ Ì[/”9 Ì[=”: Ì[>”ÌL Ì[ÌP”ÌM Ì[ÌQš” Ì\” Ì\!” Ì\#”) Ì\-”+ Ì\/”0 Ì\4”4 Ì\8”> Ì\ÌB”Ì@ Ì\ÌD”ÌO Ì\ÌS–” Ì]” Ì] ” Ì]"”( Ì],”* Ì].”. Ì]2–” Ì^” Ì^"”  Ì^$”* Ì^.”, Ì^0”2 Ì^6’” Ì_” Ì_š” Ì`” Ì`”  Ì` ”2 Ì`2”3 Ì`3”7 Ì`7”8 Ì`8”ÌJ Ì`ÌJ”ÌK Ì`ÌK”ÌL Ì`ÌK”” Ìa” Ìa” Ìa” Ìaš” Ìb” Ìb” Ìb”  Ìb ”! Ìb!”% Ìb%”& Ìb&”1 Ìb1”2 Ìb2”3 Ìb2”” Ìc” Ìc” Ìc” Ìc™” Ìd”	 Ìd	” Ìd” Ìd” Ìd” Ìd”* Ìd:”, Ìd<”. Ìd>œ” Ìe” Ìe” Ìe” Ìe” Ìe” Ìe”' Ìe'”3 Ìe3”ÌF ÌeÌF”ÌH ÌeÌH”ÌI ÌeÌI”ÌJ ÌeÌI”” Ìf”	 Ìf	”
+ Ìf
+” Ìf
+’” Ìg” Ìg’” Ìi” Ìi”” Ìj” Ìj” Ìj” Ìj’” Ìk” Ìk’” Ìm” Ìm•” Ìn” Ìn” Ìn” Ìn” Ìn”” Ìo” Ìo” Ìo” Ìo“”	 Ìp	”
+ Ìp
+” Ìp
+”” Ìq” Ìq” Ìq” Ìq’” Ìr” Ìr”” Ìu” Ìu” Ìu” Ìu”” Ìv” Ìv” Ìv” Ìv–” Ìv” Ìv” Ìw” Ìw” Ìw” Ìw–” Ìv” Ìv” Ìx”  Ìx”! Ìx”, Ìx(–” Ìv” Ìv” Ìy” Ìy” Ìy” Ìy–” Ìv” Ìv” Ìz” Ìz” Ìz” Ìz˜” Ìv” Ìv” Ì{” Ì{” Ì{”  Ì{”! Ì{”& Ì{"’” Ìv” Ìv‘” Ì|–” Ì~” Ì~” Ì~” Ì~” Ì~ ”" Ì~2œ” Ì” Ì” Ì” Ì” Ì”  Ì ”) Ì)”. Ì.”8 Ì8”: Ì:”; Ì;”< Ì;˜” Ì€” Ì€” Ì€”% Ì€%”' Ì€'”1 Ì€1”2 Ì€2”3 Ì€2’” Ì” Ì–” Ìƒ”	 Ìƒ”
+ Ìƒ
+” Ìƒ” Ìƒ” Ìƒ#š” Ì„” Ì„” Ì„” Ì„” Ì„”- Ì„-”. Ì„.”7 Ì„7”8 Ì„8”9 Ì„8œ” Ì…” Ì…” Ì…” Ì…” Ì…” Ì…”( Ì…(”- Ì…-”3 Ì…3”5 Ì…5”6 Ì…6”7 Ì…6’” Ì†” Ì†”” Ìˆ” Ìˆ” Ìˆ” Ìˆ"š” Ì‰” Ì‰” Ì‰” Ì‰” Ì‰”$ Ì‰$”- Ì‰-”/ Ì‰/”0 Ì‰0”1 Ì‰0–” ÌŠ” ÌŠ”  ÌŠ ”) ÌŠ)”* ÌŠ*”+ ÌŠ*’” Ì‹” Ì‹‘” Ì’” Ì” Ì–” Ì” Ì” ÌØ	” ÌØ” ÌØ”  ÌØ–” Ì” Ì” ÌÙ	” ÌÙ” ÌÙ” ÌÙ’” Ì” Ì” Ì” Ì” Ì”” Ì”” Ì”” Ì”” Ì””  Ì””" Ì””$ Ì”!”) Ì”&”+ Ì”(”- Ì”*”/ Ì”,–” Ì” Ì” Ì•” Ì•” Ì•” Ì•–” Ì” Ì” Ì–” Ì–” Ì–” Ì––” Ì” Ì” Ì” Ì” Ì”$ Ì!’” Ì” Ì’” Ì‘” Ì‘’” Ì‘” Ì‘–” Ì’” Ì’” Ì’” Ì’” Ì’”' Ì’$’” Ì’” Ì’’” Ì” Ì˜” Ì˜” Ì˜” Ì˜” Ì˜” Ì˜”! Ì˜”# Ì˜”% Ì˜” Ì˜” Ì˜” ÌÌ” ÌÌ” ÌÌ” ÌÌ” ÌÌ”! ÌÌ”# ÌÌ ”% ÌÌ"”* ÌÌ'”, ÌÌ)”. ÌÌ+”0 ÌÌ-–” Ì˜” Ì˜” ÌÍ” ÌÍ” ÌÍ” ÌÍ–” Ì˜” Ì˜” ÌÎ” ÌÎ” ÌÎ” ÌÎ’” Ì™” Ì™Ÿ” Ìš”! Ìš!”) Ìš"”+ Ìš$”1 Ìš*”3 Ìš,”7 Ìš0”8 Ìš1”ÌC Ìš<”ÌO Ìš=”ÌV ÌšÌD”ÌW ÌšÌE”Ì[ ÌšÌI”Ì\ ÌšÌJ”Ì^ ÌšÌL•” Ìš”! Ìš!”" ÌÅ”) ÌÅ”* ÌÅ”” ÌÆ”# ÌÆ#”% ÌÆ%”& ÌÆ&–” ÌÇ” ÌÇ” ÌÇ”$ ÌÇ$”% ÌÇ%”) ÌÇ)”” ÌÈ”# ÌÈ#”% ÌÈ%”' ÌÈ'”” ÌÉ”! ÌÉ!”# ÌÉ#”% ÌÉ%‘” ÌÊ’” Ì›” Ì›’”$ Ìœ”, Ìœ$–”  Ìœ”( Ìœ$”) ÌÁ”. ÌÁ#”/ ÌÁ$”5 ÌÁ*’”$ Ì ”' Ì#–”$ Ì ”' Ì#”( ÌÀ"”- ÌÀ'”. ÌÀ(”3 ÌÀ-–”$ Ì ”' Ì#”( ÌÀ/”/ ÌÀ6”0 ÌÀ7”1 ÌÀ8–”$ Ì$”( Ì(”0 Ì)”> Ì7”? Ì8”ÌC Ì<’”  Ì$”$ Ì(’”$ ÌŸ$”) ÌŸ)’”  ÌŸ$”% ÌŸ)“”$ Ì $”( Ì (”0 Ì )–”( Ì¡(”1 Ì¡1”3 Ì¡3”Ì@ Ì¡Ì@”ÌA Ì¡ÌA”ÌD Ì¡ÌD–”( Ì¢(”2 Ì¢2”4 Ì¢4”= Ì¢=”> Ì¢>”ÌB Ì¢ÌB–”( Ì£(”6 Ì£6”8 Ì£8”ÌA Ì£ÌA”ÌB Ì£ÌB”ÌM Ì£ÌM‘”% Ì¤%–”$ Ì $”( Ì (”) Ì¿&”. Ì¿+”/ Ì¿,”4 Ì¿1–”$ Ì¥(”( Ì¥,”6 Ì¥:”7 Ì¥;”< Ì¥Ì@”> Ì¥ÌBœ”0 Ì¦,”6 Ì¦2”ÌG Ì¦3”ÌJ Ì¦6”ÌL Ì¦8”ÌN Ì¦:”ÌR Ì¦>”ÌT Ì¦Ì@”Ì^ Ì¦ÌJ”Ì_ Ì¦ÌK”Ìe Ì¦ÌQ”Ìg Ì¦ÌS–”0 Ì¦,”6 Ì¦2”7 Ì§1”? Ì§9”Ì@ Ì§:”ÌB Ì§<–”0 Ì¦,”6 Ì¦2”7 Ì¨1”> Ì¨8”? Ì¨9”Ì@ Ì¨:—”0 Ì¦,”6 Ì¦2”7 Ì©1”> Ì©8”? Ì©9”ÌB Ì©<”ÌD Ì©>™”4 Ìª4”8 Ìª8”9 Ìª9”ÌS ÌªÌS”ÌV ÌªÌV”Ìd ÌªÌd”Ìe ÌªÌe”Ìi ÌªÌi”Ìj ÌªÌi˜”4 Ì«4”8 Ì«8”9 Ì«9”ÌQ Ì«ÌQ”ÌR Ì«ÌR”ÌV Ì«ÌV”ÌX Ì«ÌX”ÌY Ì«ÌX’”0 Ì¬0”1 Ì¬1’”, Ì¦,”2 Ì¦2‘”% Ì­)‘”% Ì­)–”$ Ì®(”( Ì®,”6 Ì®:”7 Ì®;”; Ì®?”= Ì®ÌAœ”0 Ì¯,”6 Ì¯2”ÌG Ì¯3”ÌJ Ì¯6”ÌL Ì¯8”ÌN Ì¯:”ÌR Ì¯>”ÌT Ì¯Ì@”Ì^ Ì¯ÌJ”Ì_ Ì¯ÌK”Ìe Ì¯ÌQ”Ìg Ì¯ÌS–”0 Ì¯,”6 Ì¯2”7 Ì°1”? Ì°9”Ì@ Ì°:”ÌB Ì°<–”0 Ì¯,”6 Ì¯2”7 Ì±1”> Ì±8”? Ì±9”Ì@ Ì±:˜”0 Ì¯,”6 Ì¯2”7 Ì²1”> Ì²8”? Ì²9”ÌD Ì²>”ÌH Ì²ÌA”ÌJ Ì²ÌC›”4 Ì³4”: Ì³:”> Ì³>”? Ì³?”ÌF Ì³ÌF”ÌG Ì³ÌG”ÌU Ì³ÌU”ÌV Ì³ÌV”ÌZ Ì³ÌZ”Ì[ Ì³Ì[”Ì\ Ì³Ì[’”0 Ì´0”1 Ì´1’”, Ì¯,”2 Ì¯2‘”% Ìµ)‘”% Ìµ)–”$ Ì¶(”( Ì¶,”6 Ì¶:”7 Ì¶;”= Ì¶ÌA”? Ì¶ÌCœ”0 Ì·,”6 Ì·2”ÌG Ì·3”ÌJ Ì·6”ÌL Ì·8”ÌN Ì·:”ÌR Ì·>”ÌT Ì·Ì@”Ì^ Ì·ÌJ”Ì_ Ì·ÌK”Ìe Ì·ÌQ”Ìg Ì·ÌS–”0 Ì·,”6 Ì·2”7 Ì¸1”? Ì¸9”Ì@ Ì¸:”ÌB Ì¸<–”0 Ì·,”6 Ì·2”7 Ì¹1”> Ì¹8”? Ì¹9”Ì@ Ì¹:—”0 Ì·,”6 Ì·2”7 Ìº1”> Ìº8”? Ìº9”ÌB Ìº<”ÌD Ìº>š”4 Ì»4”8 Ì»8”9 Ì»9”ÌE Ì»ÌE”ÌF Ì»ÌF”ÌT Ì»ÌT”ÌU Ì»ÌU”ÌY Ì»ÌY”ÌZ Ì»ÌZ”Ì[ Ì»ÌZ’”0 Ì¼0”1 Ì¼1’”, Ì·,”2 Ì·2‘”% Ì½)‘”% Ì½)’”  Ì $”$ Ì (’”  Ì ”# Ì#’”  Ìœ”( Ìœ$’” Ìœ”$ Ìœ$””7 Ì› ”> Ì›'”? Ì›(”ÌQ Ì›:’” Ì›” Ì›’” Ìš” Ìš!””/ Ì™”3 Ì™”4 Ì™”? Ì™(’” Ì™” Ì™’” Ì˜” Ì˜’” ÌĞ” ÌĞ’” ÌĞ” ÌĞš” ÌÒ” ÌÒ” ÌÒ” ÌÒ”" ÌÒ”$ ÌÒ”( ÌÒ!”) ÌÒ"”2 ÌÒ+”4 ÌÒ-–” ÌÒ” ÌÒ” ÌÓ” ÌÓ” ÌÓ” ÌÓ–” ÌÒ” ÌÒ” ÌÔ” ÌÔ” ÌÔ”! ÌÔ–” ÌÒ” ÌÒ” ÌÕ” ÌÕ” ÌÕ”! ÌÕ˜” ÌÒ” ÌÒ” ÌÖ”$ ÌÖ ”% ÌÖ!”* ÌÖ&”+ ÌÖ'”6 ÌÖ2’” Ì” Ì‘” ÌÚÔrG–§version¤file§sources®sourcesContent¥names¨mappingsÀ‘À‘ÀÜv‘”    ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”  	 ‘”  
+ ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”    ‘”  ! ‘”  " ‘”  # ‘”  $ ‘”  % ‘”  & ‘”  ' ‘”  ( ‘”  ) ‘”  * ‘”  + ‘”  , ‘”  - ‘”  . ‘”  / ‘”  0 ‘”  1 ‘”  2 ‘”  3 ‘”  4 ‘”  5 ‘”  6 ‘”  7 ‘”  8 ‘”  9 ‘”  : ‘”  ; ‘”  < ‘”  = ‘”  > ‘”  ? ‘”  Ì@ ‘”  ÌA ‘”  ÌB ‘”  ÌC ‘”  ÌD ‘”  ÌE ‘”  ÌF ‘”  ÌG ‘”  ÌH ‘”  ÌI ‘”  ÌJ ‘”  ÌK ‘”  ÌL ‘”  ÌM ‘”  ÌN ‘”  ÌO ‘”  ÌP ‘”  ÌQ ‘”  ÌR ‘”  ÌS ‘”  ÌT ‘”  ÌU ‘”  ÌV ‘”  ÌW ‘”  ÌX ‘”  ÌY ‘”  ÌZ ‘”  Ì[ ‘”  Ì\ ‘”  Ì] ‘”  Ì^ ‘”  Ì_ ‘”  Ì` ‘”  Ìa ‘”  Ìb ‘”  Ìc ‘”  Ìd ‘”  Ìe ‘”  Ìf ‘”  Ìg ‘”  Ìh ‘”  Ìi ‘”  Ìj ‘”  Ìk ‘”  Ìl ‘”  Ìm ‘”  Ìn ‘”  Ìo ‘”  Ìp ‘”  Ìq ‘”  Ìr ‘”  Ìs ‘”  Ìt ‘”  Ìu ‘”  Ìv ‘”  Ìw ‘”  Ìx ‘”  Ìy ‘”  Ìz ‘”  Ì{ ‘”  Ì| ‘”  Ì} ‘”  Ì~ ‘”  Ì ‘”  Ì€ ‘”  Ì ‘”  Ì‚ ‘”  Ìƒ ‘”  Ì„ ‘”  Ì… ‘”  Ì† ‘”  Ì‡ ‘”  Ìˆ ‘”  Ì‰ ‘”  ÌŠ ‘”  Ì‹ ‘”  ÌŒ ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì‘ ‘”  Ì’ ‘”  Ì“ ‘”  Ì” ‘”  Ì• ‘”  Ì– ‘”  Ì— ‘”  Ì˜ ‘”  Ì™ ‘”  Ìš ‘”  Ì› ‘”  Ìœ ‘”  Ì ‘”  Ì ‘”  ÌŸ ‘”  Ì  ‘”  Ì¡ ‘”  Ì¢ ‘”  Ì£ ‘”  Ì¤ ‘”  Ì¥ ‘”  Ì¦ ‘”  Ì§ ‘”  Ì¨ ‘”  Ì© ‘”  Ìª ‘”  Ì« ‘”  Ì¬ ‘”  Ì­ ‘”  Ì® ‘”  Ì¯ ‘”  Ì° ‘”  Ì± ‘”  Ì² ‘”  Ì³ ‘”  Ì´ ‘”  Ìµ ‘”  Ì¶ ‘”  Ì· ‘”  Ì¸ ‘”  Ì¹ ‘”  Ìº ‘”  Ì» ‘”  Ì¼ ‘”  Ì½ ‘”  Ì¾ ‘”  Ì¿ ‘”  ÌÀ ‘”  ÌÁ ‘”  ÌÂ ‘”  ÌÃ ‘”  ÌÄ ‘”  ÌÅ ‘”  ÌÆ ‘”  ÌÇ ‘”  ÌÈ ‘”  ÌÉ ‘”  ÌÊ ‘”  ÌË ‘”  ÌÌ ‘”  ÌÍ ‘”  ÌÎ ‘”  ÌÏ ‘”  ÌĞ ‘”  ÌÑ ‘”  ÌÒ ‘”  ÌÓ ‘”  ÌÔ ‘”  ÌÕ ‘”  ÌÖ ‘”  Ì× ‘”  ÌØ ‘”  ÌÙ ‘”  ÌÚ ‘”  ÌÛ ‘”  ÌÜ ‘”  Ìİ ‘”  ÌŞ ‘”  Ìß ‘”  Ìà ‘”  Ìá ‘”  Ìâ ‘”  Ìã ‘”  Ìä ‘”  Ìå ‘”  Ìæ ‘”  Ìç ‘”  Ìè ‘”  Ìé ‘”  Ìê ‘”  Ìë ‘”  Ìì ‘”  Ìí ‘”  Ìî ‘”  Ìï ‘”  Ìğ ‘”  Ìñ ‘”  Ìò ‘”  Ìó ‘”  Ìô ‘”  Ìõ ‘”  Ìö ‘”  Ì÷ ‘”  Ìø ‘”  Ìù ‘”  Ìú ‘”  Ìû ‘”  Ìü ‘”  Ìı ‘”  Ìş ‘”  Ìÿ ‘”  Í  ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í	 ‘”  Í
+ ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í  ‘”  Í! ‘”  Í" ‘”  Í# ‘”  Í$ ‘”  Í% ‘”  Í& ‘”  Í' ‘”  Í( ‘”  Í) ‘”  Í* ‘”  Í+ ‘”  Í, ‘”  Í- ‘”  Í. ‘”  Í/ ‘”  Í0 ‘”  Í1 ‘”  Í2 ‘”  Í3 ‘”  Í4 ‘”  Í5 ‘”  Í6 ‘”  Í7 ‘”  Í8 ‘”  Í9 ‘”  Í: ‘”  Í; ‘”  Í< ‘”  Í= ‘”  Í> ‘”  Í? ‘”  Í@ ‘”  ÍA ‘”  ÍB ‘”  ÍC ‘”  ÍD ‘”  ÍE ‘”  ÍF ‘”  ÍG ‘”  ÍH ‘”  ÍI ‘”  ÍJ ‘”  ÍK ‘”  ÍL ‘”  ÍM ‘”  ÍN ‘”  ÍO ‘”  ÍP ‘”  ÍQ ‘”  ÍR ‘”  ÍS ‘”  ÍT ‘”  ÍU ‘”  ÍV ‘”  ÍW ‘”  ÍX ‘”  ÍY ‘”  ÍZ ‘”  Í[ ‘”  Í\ ‘”  Í] ‘”  Í^ ‘”  Í_ ‘”  Í` ‘”  Ía ‘”  Íb ‘”  Íc ‘”  Íd ‘”  Íe ‘”  Íf ‘”  Íg ‘”  Íh ‘”  Íi ‘”  Íj ‘”  Ík ‘”  Íl ‘”  Ím ‘”  Ín ‘”  Ío ‘”  Íp ‘”  Íq ‘”  Ír ‘”  Ís ‘”  Ít ‘”  Íu ÔrH’§missing¦pluginÃ¦genAbcÂÔ  ÔrI”²dynamicImportCache¹exportAllDeclarationCache»exportNamedDeclarationCache«importCache“ÔrJ•¤type¥start£endªspecifiers¦source±ImportDeclarationÌ€Ì¢‘ÔrK”¤type¥start£end¥local¶ImportDefaultSpecifierÌ‡ÌÔrL”¤type¥start£end¤nameªIdentifierÌ‡Ì¦routerÔrM•¤type¥start£end¥value£raw§LiteralÌ“Ì¡¬@ohos.router®"@ohos.router"J±ImportDeclarationÌ¤Í6–ÔrN•¤type¥start£end¨imported¥local¯ImportSpecifierÌ­Ì¼LªIdentifierÌ­Ì¼¯connectToDeviceLªIdentifierÌ­Ì¼¯connectToDeviceN¯ImportSpecifierÌ¾ÌÎLªIdentifierÌ¾ÌÎ°disconnectDeviceLªIdentifierÌ¾ÌÎ°disconnectDeviceN¯ImportSpecifierÌĞÌÜLªIdentifierÌĞÌÜ¬getShortUUIDLªIdentifierÌĞÌÜ¬getShortUUIDN¯ImportSpecifierÌŞÌğLªIdentifierÌŞÌğ²readCharacteristicLªIdentifierÌŞÌğ²readCharacteristicN¯ImportSpecifierÌòÍ	LªIdentifierÌòÍ	·subscribeCharacteristicLªIdentifierÌòÍ	·subscribeCharacteristicN¯ImportSpecifierÍÍLªIdentifierÍÍ³writeCharacteristicLªIdentifierÍÍ³writeCharacteristicM§LiteralÍ&Í5­../ble/helper¯'../ble/helper'J±ImportDeclarationÍ8Ís‘N¯ImportSpecifierÍAÍOLªIdentifierÍAÍO®BleWriteDialogLªIdentifierÍAÍO®BleWriteDialogM§LiteralÍWÍr¹../dialogs/BleWriteDialog»'../dialogs/BleWriteDialog'
