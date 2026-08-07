@@ -1,8 +1,48 @@
 {
   "color": [
     {
-      "name": "start_window_background",
+      "name": "mainTone",
+      "value": "#021629"
+    },
+    {
+      "name": "mainTone1",
+      "value": "#68737D"
+    },
+    {
+      "name": "colorAccent",
+      "value": "#5975EF"
+    },
+    {
+      "name": "background",
+      "value": "#F5F5F5"
+    },
+    {
+      "name": "white",
       "value": "#FFFFFF"
+    },
+    {
+      "name": "circle_bg",
+      "value": "#F0F0F0"
+    },
+    {
+      "name": "content_bg",
+      "value": "#F8F8F8"
+    },
+    {
+      "name": "main_tone",
+      "value": "#222222"
+    },
+    {
+      "name": "main_tone1",
+      "value": "#666666"
+    },
+    {
+      "name": "connecting",
+      "value": "#243F64"
+    },
+    {
+      "name": "disconnected",
+      "value": "#FF5722"
     }
   ]
 }

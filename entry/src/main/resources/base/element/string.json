@@ -10,10 +10,123 @@
     },
     {
       "name": "EntryAbility_label",
-      "value": "New蓝牙小助手"
-    },{
+      "value": "健康彩虹灯"
+    },
+    {
       "name": "permission_reason",
       "value": "请在此描述你使用蓝牙的理由"
+    },
+    {
+      "name": "light_control",
+      "value": "灯光模式"
+    },
+    {
+      "name": "music_control",
+      "value": "音乐模式"
+    },
+    {
+      "name": "volume",
+      "value": "音量"
+    },
+    {
+      "name": "ble_mode",
+      "value": "蓝牙模式"
+    },
+    {
+      "name": "local_mode",
+      "value": "本地模式"
+    },
+    {
+      "name": "single_loop",
+      "value": "单曲循环"
+    },
+    {
+      "name": "list_loop",
+      "value": "列表循环"
+    },
+    {
+      "name": "next_song",
+      "value": "下一首"
+    },
+    {
+      "name": "pre_song",
+      "value": "上一首"
+    },
+    {
+      "name": "play",
+      "value": "播放暂停"
+    },
+    {
+      "name": "color_temperature",
+      "value": "色温"
+    },
+    {
+      "name": "dimmer",
+      "value": "调光"
+    },
+    {
+      "name": "health_mode",
+      "value": "健康"
+    },
+    {
+      "name": "work_mode",
+      "value": "工作"
+    },
+    {
+      "name": "sleep_mode",
+      "value": "睡眠"
+    },
+    {
+      "name": "wake_mode",
+      "value": "唤醒"
+    },
+    {
+      "name": "up",
+      "value": "向上"
+    },
+    {
+      "name": "stop",
+      "value": "停止"
+    },
+    {
+      "name": "down",
+      "value": "向下"
+    },
+    {
+      "name": "on_off",
+      "value": "开关"
+    },
+    {
+      "name": "sub_name",
+      "value": "UP-DS01"
+    },
+    {
+      "name": "primary_name",
+      "value": "健康彩虹灯"
+    },
+    {
+      "name": "cold",
+      "value": "冷色"
+    },
+    {
+      "name": "neutral",
+      "value": "自然"
+    },
+    {
+      "name": "warm",
+      "value": "暖色"
+    },
+    {
+      "name": "ble_connected",
+      "value": "蓝牙已连接"
+    },
+    {
+      "name": "ble_disconnected",
+      "value": "蓝牙已断开"
+    },
+    {
+      "name": "ble_connecting",
+      "value": "正在连接..."
     }
   ]
 }

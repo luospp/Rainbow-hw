@@ -1,0 +1,745 @@
+Ôr@Ÿªassertions¤code´customTransformCache¬dependencies¢id¤meta±moduleSideEffects¬originalCode±originalSourcemap«resolvedIds®sourcemapChainµsyntheticNamedExportsµtransformDependencies®transformFiles¨cacheAstÔrAÚ/Uimport access from "@ohos.bluetooth.access";
+import ble from "@ohos.bluetooth.ble";
+import constant from "@ohos.bluetooth.constant";
+import abilityAccessCtrl from "@ohos.abilityAccessCtrl";
+import bundleManager from "@ohos.bundle.bundleManager";
+import buffer from "@ohos.buffer";
+import util from "@ohos.util";
+export function getBleState() {
+    let bleState = access.BluetoothState.STATE_OFF;
+    try {
+        bleState = access.getState();
+        console.debug(`get state ble state :${bleState}`);
+    }
+    catch (err) {
+        // æ— æƒé™
+        console.error(`getBleState errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+    return bleState;
+}
+export async function getGrantStatus() {
+    // è·å–åº”ç”¨ç¨‹åºçš„accessTokenID
+    let tokenId = 0;
+    let grantStatus = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED;
+    try {
+        tokenId =
+            (await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)).appInfo.accessTokenId;
+        // æ ¡éªŒåº”ç”¨æ˜¯å¦è¢«æˆäºˆæƒé™
+        grantStatus =
+            await abilityAccessCtrl.createAtManager().checkAccessToken(tokenId, 'ohos.permission.ACCESS_BLUETOOTH');
+    }
+    catch (err) {
+        console.error(`getGrantStatus errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+    return grantStatus;
+}
+export async function jumpToSetting(context) {
+    let bundleName = (await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)).appInfo.name;
+    console.log(`bundle name: ${bundleName}`);
+    let wantInfo = {
+        bundleName: 'com.huawei.hmos.settings',
+        abilityName: 'com.huawei.hmos.settings.MainAbility',
+        uri: 'application_info_entry',
+        parameters: {
+            pushParams: bundleName // åº”ç”¨çš„ bundleName
+        }
+    };
+    await context.startAbility(wantInfo).catch((err) => {
+        console.error(`startAbility errCode: ${err.code}, errMessage: ${err.message}`);
+    });
+}
+export async function askUserAuthorize(context, userAgreeCallback = null, userDenyCallback = null, notPopCallback = null) {
+    let result = await abilityAccessCtrl.createAtManager()
+        .requestPermissionsFromUser(context, ['ohos.permission.ACCESS_BLUETOOTH'])
+        .catch((err) => console.error(`errCode: ${err.code}, errMessage: ${err.message}`));
+    if (result) {
+        let grantStatus = result.authResults[0];
+        console.info(`grant status: ${grantStatus}`);
+        if (grantStatus === 0) {
+            if (userAgreeCallback) {
+                userAgreeCallback();
+            }
+        }
+        else {
+            if (result.dialogShownResults && result.dialogShownResults[0]) {
+                // å¼¹çª—äº†ï¼Œç”¨æˆ·æ²¡æœ‰åŒæ„
+                if (userDenyCallback) {
+                    userDenyCallback();
+                }
+            }
+            else {
+                if (notPopCallback) {
+                    notPopCallback();
+                }
+            }
+        }
+    }
+    else {
+        console.info("no result");
+    }
+}
+export async function enableBle(bleOnCallback = null) {
+    access.on('stateChange', state => {
+        if (state == access.BluetoothState.STATE_ON) {
+            access.off('stateChange');
+            if (bleOnCallback) {
+                bleOnCallback();
+            }
+        }
+        console.debug(`bluetooth statues: ${state}`);
+    });
+    try {
+        console.debug("enableBle");
+        access.enableBluetooth();
+    }
+    catch (err) {
+        console.error(`enableBluetooth errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+}
+export async function startBleScan(scanResultCallback) {
+    ble.on('BLEDeviceFind', scanResult => {
+        scanResultCallback(scanResult.filter(result => result.connectable).map(result => ({
+            name: result.deviceName, rssi: result.rssi, macAddress: result.deviceId
+        })));
+    });
+    try {
+        console.log("ble.startBLEScan");
+        ble.startBLEScan([{}], {
+            interval: 1000,
+            dutyMode: ble.ScanDuty.SCAN_MODE_LOW_POWER,
+            matchMode: ble.MatchMode.MATCH_MODE_AGGRESSIVE
+        });
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+}
+export function stopBleScan() {
+    try {
+        console.log("ble.stopBLEScan");
+        ble.stopBLEScan();
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+}
+let connectedDevice = undefined;
+let serviceList = [];
+export async function connectToDevice(macAddress, connectedCallback = null, disconnectedCallback = null, servicesCallback = null, characteristicNotifyCallback = null) {
+    connectedDevice = ble.createGattClientDevice(macAddress);
+    connectedDevice?.on('BLEConnectionStateChange', async (state) => {
+        let connectState = state.state;
+        if (connectState === constant.ProfileConnectionState.STATE_CONNECTED) {
+            if (connectedCallback) {
+                connectedCallback();
+            }
+            connectedDevice?.on('BLECharacteristicChange', (characteristic) => {
+                if (characteristicNotifyCallback) {
+                    characteristicNotifyCallback(getShortUUID(characteristic.characteristicUuid), arrayBufferToString(characteristic.characteristicValue));
+                }
+            });
+            serviceList = await connectedDevice?.getServices();
+            if (servicesCallback) {
+                servicesCallback(serviceList);
+            }
+        }
+        else if (connectState === constant.ProfileConnectionState.STATE_DISCONNECTED) {
+            if (disconnectedCallback) {
+                disconnectedCallback();
+            }
+            // è¿™å¥å¾ˆå…³é”®ï¼Œå–æ¶ˆè®¢é˜…æ‰€æœ‰äº‹ä»¶
+            connectedDevice?.close();
+            connectedDevice = null;
+        }
+    });
+    try {
+        connectedDevice?.connect();
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+    return connectedDevice;
+}
+export async function disconnectDevice() {
+    try {
+        connectedDevice?.disconnect();
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+}
+// æ ¹æ®BLEåè®®ï¼ŒæŠŠUUIDæ”¹ä¸ºçŸ­å†™æ¨¡å¼ï¼Œæ–¹ä¾¿æ“ä½œ
+export const getShortUUID = (src) => {
+    const regex = /0000(\w{4})-/g;
+    const matches = regex.exec(src);
+    return matches != null ? matches[1] : src;
+};
+const strToArrayBuffer = (str) => {
+    return buffer.from(str.toUpperCase().match(/[0-9A-F]{2}/g).map(s => parseInt(s, 16))).buffer;
+};
+const arrayBufferToString = (buff) => {
+    let temp = "";
+    let arr = new Uint8Array(buff);
+    for (let i = 0; i < arr.byteLength; i++) {
+        temp += arr[i].toString(16);
+    }
+    return temp;
+};
+const findTargetCharacteristic = (characteristicUUID) => {
+    let targetCharacteristic = undefined;
+    serviceList.forEach(service => {
+        service.characteristics.forEach(characteristic => {
+            if (getShortUUID(characteristic.characteristicUuid) == characteristicUUID) {
+                targetCharacteristic = characteristic;
+            }
+        });
+    });
+    if (targetCharacteristic == undefined) {
+        console.error(`characteristic ${characteristicUUID} not found`);
+    }
+    return targetCharacteristic;
+};
+export const readCharacteristic = async (characteristicUUID) => {
+    try {
+        let result = await connectedDevice?.readCharacteristicValue(findTargetCharacteristic(characteristicUUID));
+        // return arrayBufferToString(result?.characteristicValue)
+        return arrToStr(result?.characteristicValue);
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+};
+// å‘é€éŸ³ä¹æŒ‡ä»¤
+export const writeMusicCharacteristic = async (writeValue) => {
+    let targetCharacteristic = findTargetCharacteristic("FFF3");
+    targetCharacteristic.characteristicValue = strToBuffer(writeValue);
+    try {
+        await connectedDevice?.writeCharacteristicValue(targetCharacteristic, ble.GattWriteType.WRITE);
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+};
+// å‘é€ç¯æ§æŒ‡ä»¤
+export const writeLightCharacteristic = async (arr) => {
+    let targetCharacteristic = findTargetCharacteristic("FFF1");
+    targetCharacteristic.characteristicValue = convertToArrayBuffer(arr);
+    try {
+        await connectedDevice?.writeCharacteristicValue(targetCharacteristic, ble.GattWriteType.WRITE);
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+};
+export const subscribeCharacteristic = (characteristicUUID) => {
+    try {
+        connectedDevice?.setCharacteristicChangeNotification(findTargetCharacteristic(characteristicUUID), true);
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+};
+/**
+ * ASCII è§£ç ï¼šArrayBuffer è½¬ String
+ * @param arrayBuffer å¾…è§£ç çš„äºŒè¿›åˆ¶ç¼“å†²åŒº
+ * @returns è§£ç åçš„ ASCII å­—ç¬¦ä¸²ï¼ˆè¶…å‡º ASCII èŒƒå›´çš„å­—èŠ‚ä¼šè½¬ä¸ºå¯¹åº”å­—ç¬¦ï¼‰
+ */
+function arrToStr(arrayBuffer) {
+    // 1. å°† ArrayBuffer è½¬ä¸º Uint8Array äºŒè¿›åˆ¶è§†å›¾ï¼Œä¾¿äºéå†å­—èŠ‚
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let resultStr = "";
+    // 2. éå†å­—èŠ‚ï¼Œå°†æ¯ä¸ªå­—èŠ‚è½¬ä¸ºå¯¹åº”çš„ ASCII å­—ç¬¦
+    for (let i = 0; i < uint8Array.length; i++) {
+        // String.fromCharCodeï¼šå°†å­—èŠ‚å€¼ï¼ˆ0-127ï¼‰è½¬ä¸ºå¯¹åº” ASCII å­—ç¬¦
+        resultStr += String.fromCharCode(uint8Array[i]);
+    }
+    return resultStr;
+}
+/**
+ *  ArrayBuffer ç±»å‹è¿”å›
+ * @param arr å­—ç¬¦ä¸²æ•°ç»„ï¼ˆå¦‚ ["[", "T", "0x00", "]"]ï¼‰
+ * @returns ArrayBuffer äºŒè¿›åˆ¶ç¼“å†²åŒºï¼Œè½¬æ¢å¤±è´¥è¿”å› null
+ */
+function convertToArrayBuffer(arr) {
+    const byteList = []; // å…ˆå­˜å‚¨å­—èŠ‚æ•°å€¼ï¼ˆ0-255ï¼‰ï¼Œåç»­è½¬ä¸º Uint8Array
+    for (const element of arr) {
+        let byteValue;
+        if (element.startsWith("0x")) {
+            // å¤„ç†åå…­è¿›åˆ¶å­—ç¬¦ä¸²ï¼ˆå¦‚ "0x00" -> 0x00ï¼‰
+            try {
+                // æˆªå– "0x" åçš„éƒ¨åˆ†ï¼Œè½¬ä¸º16è¿›åˆ¶æ•´æ•°
+                const hexStr = element.substring(2);
+                const intValue = parseInt(hexStr, 16);
+                // éªŒè¯å­—èŠ‚èŒƒå›´ï¼ˆ-128 ~ 127ï¼Œå¯¹åº” Byte ç±»å‹ï¼‰
+                if (intValue < -128 || intValue > 255) {
+                    console.log(`è¶…å‡ºå­—èŠ‚èŒƒå›´çš„åå…­è¿›åˆ¶å€¼ï¼š${element}`);
+                    return null;
+                }
+                // è½¬æ¢ä¸º Byte å¯¹åº”çš„æ•°å€¼ï¼ˆå¤„ç†æ— ç¬¦å·/æœ‰ç¬¦å·å…¼å®¹ï¼‰
+                byteValue = intValue > 127 ? intValue - 256 : intValue;
+            }
+            catch (e) {
+                console.log(`æ— æ•ˆçš„åå…­è¿›åˆ¶å€¼ï¼š${element}ï¼Œå¼‚å¸¸ä¿¡æ¯ï¼š${e}`);
+                return null;
+            }
+        }
+        else {
+            // å¤„ç†æ™®é€šå­—ç¬¦ï¼ˆå–ç¬¬ä¸€ä¸ªå­—ç¬¦çš„ ASCII ç ï¼‰
+            if (element.length === 0) {
+                console.log("ç©ºå­—ç¬¦ä¸²æ— æ³•è½¬æ¢ä¸ºå­—èŠ‚");
+                return null;
+            }
+            // è·å–ç¬¬ä¸€ä¸ªå­—ç¬¦çš„ ASCII ç ï¼Œè½¬ä¸º Byte ç±»å‹
+            byteValue = element.charCodeAt(0) & 0xFF; // ç¡®ä¿åœ¨å­—èŠ‚èŒƒå›´å†…
+        }
+        byteList.push(byteValue);
+    }
+    // å°†å­—èŠ‚æ•°å€¼åˆ—è¡¨è½¬ä¸º Uint8Arrayï¼Œå†è·å– ArrayBuffer è¿”å›
+    const uint8Array = new Uint8Array(byteList);
+    return uint8Array.buffer;
+}
+function strToBuffer(str) {
+    // 1. åˆ›å»º TextEncoder å®ä¾‹ï¼Œé»˜è®¤ç¼–ç ä¸º UTF-8
+    const encoder = new util.TextEncoder();
+    // 2. å°†å­—ç¬¦ä¸²ç¼–ç ä¸º Uint8Array å­—èŠ‚æ•°ç»„
+    const uint8Array = encoder.encode(str);
+    // 3. æå– Uint8Array å¯¹åº”çš„ ArrayBuffer
+    return uint8Array.buffer;
+}
+//# sourceMappingURL=helper.js.mapÂ—Ùs hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bluetooth.access.d.tsÙp hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bluetooth.ble.d.tsÙu hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bluetooth.constant.d.tsÙt hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.abilityAccessCtrl.d.tsÙw hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bundle.bundleManager.d.tsÙi hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.buffer.d.tsÙg hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.util.d.tsÙW/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/src/main/ets/ble/helper.tsÔrB›ªmoduleName±isLocalDependency¯isNodeEntryFile§pkgPath±belongProjectPath§pkgNameªpkgVersion±dependencyPkgInfo¯hostModulesInfo°belongModulePath¬shouldEmitJs¥entryÃÂÙ</Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entryÙ6/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper¥entry¥1.0.0Ô  “ÔrC’²hostDependencyName®hostModuleName­../ble/helper¥entryC­../ble/helper¥entryC­../ble/helper¥entryÙ</Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entryÃÃÚ-import { access, ble, constant } from '@kit.ConnectivityKit'
+import { abilityAccessCtrl, common, Want } from '@kit.AbilityKit'
+import { bundleManager } from '@kit.AbilityKit'
+import { BusinessError, Callback } from '@kit.BasicServicesKit'
+import { buffer, util } from '@kit.ArkTS'
+
+export function getBleState(): access.BluetoothState {
+  let bleState = access.BluetoothState.STATE_OFF
+  try {
+    bleState = access.getState()
+    console.debug(`get state ble state :${bleState}`)
+  } catch (err) {
+    // æ— æƒé™
+    console.error(`getBleState errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+  return bleState
+}
+
+export async function getGrantStatus(): Promise<abilityAccessCtrl.GrantStatus> {
+  // è·å–åº”ç”¨ç¨‹åºçš„accessTokenID
+  let tokenId: number = 0
+  let grantStatus: abilityAccessCtrl.GrantStatus = abilityAccessCtrl.GrantStatus.PERMISSION_DENIED
+
+  try {
+    tokenId =
+      (await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)).appInfo.accessTokenId
+    // æ ¡éªŒåº”ç”¨æ˜¯å¦è¢«æˆäºˆæƒé™
+    grantStatus =
+      await abilityAccessCtrl.createAtManager().checkAccessToken(tokenId, 'ohos.permission.ACCESS_BLUETOOTH')
+  } catch (err) {
+    console.error(`getGrantStatus errCode: ${err.code}, errMessage: ${err.message}`);
+  }
+  return grantStatus
+}
+
+export async function jumpToSetting(context: common.UIAbilityContext) {
+  let bundleName =
+    (await bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)).appInfo.name
+  console.log(`bundle name: ${bundleName}`)
+  let wantInfo: Want = {
+    bundleName: 'com.huawei.hmos.settings',
+    abilityName: 'com.huawei.hmos.settings.MainAbility',
+    uri: 'application_info_entry',
+    parameters: {
+      pushParams: bundleName // åº”ç”¨çš„ bundleName
+    }
+  }
+
+  await context.startAbility(wantInfo).catch((err: BusinessError) => {
+    console.error(`startAbility errCode: ${err.code}, errMessage: ${err.message}`)
+  })
+}
+
+export async function askUserAuthorize(context: common.UIAbilityContext,
+  userAgreeCallback: Function = null,
+  userDenyCallback: Function = null,
+  notPopCallback: Function = null) {
+  let result = await abilityAccessCtrl.createAtManager()
+    .requestPermissionsFromUser(context, ['ohos.permission.ACCESS_BLUETOOTH'])
+    .catch((err: BusinessError) => console.error(`errCode: ${err.code}, errMessage: ${err.message}`))
+  if (result) {
+    let grantStatus = result.authResults[0]
+    console.info(`grant status: ${grantStatus}`)
+
+    if (grantStatus === 0) {
+      if (userAgreeCallback) {
+        userAgreeCallback()
+      }
+    } else {
+      if (result.dialogShownResults && result.dialogShownResults[0]) {
+        // å¼¹çª—äº†ï¼Œç”¨æˆ·æ²¡æœ‰åŒæ„
+        if (userDenyCallback) {
+          userDenyCallback()
+        }
+      } else {
+        if (notPopCallback) {
+          notPopCallback()
+        }
+      }
+    }
+  } else {
+    console.info("no result")
+  }
+}
+
+export async function enableBle(bleOnCallback: Function = null) {
+  access.on('stateChange', state => {
+    if (state == access.BluetoothState.STATE_ON) {
+      access.off('stateChange')
+      if (bleOnCallback) {
+        bleOnCallback()
+      }
+    }
+    console.debug(`bluetooth statues: ${state}`)
+  })
+
+  try {
+    console.debug("enableBle")
+    access.enableBluetooth()
+  } catch (err) {
+    console.error(`enableBluetooth errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+export interface BleDevice {
+  name: string
+  rssi: number
+  macAddress: string
+}
+
+export async function startBleScan(scanResultCallback: Callback<Array<BleDevice>>) {
+  ble.on('BLEDeviceFind', scanResult => {
+    scanResultCallback(scanResult.filter(result => result.connectable).map(result => ({
+      name: result.deviceName, rssi: result.rssi, macAddress: result.deviceId
+    })
+    ))
+  })
+  try {
+    console.log("ble.startBLEScan")
+    ble.startBLEScan([{}], {
+      interval: 1000,
+      dutyMode: ble.ScanDuty.SCAN_MODE_LOW_POWER,
+      matchMode: ble.MatchMode.MATCH_MODE_AGGRESSIVE
+    })
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+export function stopBleScan() {
+  try {
+    console.log("ble.stopBLEScan")
+    ble.stopBLEScan();
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+let connectedDevice: ble.GattClientDevice | undefined = undefined
+let serviceList: Array<ble.GattService> = []
+
+export async function connectToDevice(macAddress: string, connectedCallback: Function = null,
+  disconnectedCallback: Function = null,
+  servicesCallback: Callback<Array<ble.GattService>> = null,
+  characteristicNotifyCallback: Function = null) {
+  connectedDevice = ble.createGattClientDevice(macAddress)
+  connectedDevice?.on('BLEConnectionStateChange', async (state: ble.BLEConnectionChangeState) => {
+    let connectState: ble.ProfileConnectionState = state.state
+    if (connectState === constant.ProfileConnectionState.STATE_CONNECTED) {
+      if (connectedCallback) {
+        connectedCallback()
+      }
+      connectedDevice?.on('BLECharacteristicChange', (characteristic: ble.BLECharacteristic) => {
+        if (characteristicNotifyCallback) {
+          characteristicNotifyCallback(getShortUUID(characteristic.characteristicUuid),
+            arrayBufferToString(characteristic.characteristicValue))
+        }
+      })
+      serviceList = await connectedDevice?.getServices()
+      if (servicesCallback) {
+        servicesCallback(serviceList)
+      }
+    } else if (connectState === constant.ProfileConnectionState.STATE_DISCONNECTED) {
+      if (disconnectedCallback) {
+        disconnectedCallback()
+      }
+      // è¿™å¥å¾ˆå…³é”®ï¼Œå–æ¶ˆè®¢é˜…æ‰€æœ‰äº‹ä»¶
+      connectedDevice?.close()
+      connectedDevice = null
+    }
+  })
+
+  try {
+    connectedDevice?.connect()
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+  return connectedDevice
+}
+
+export async function disconnectDevice() {
+  try {
+    connectedDevice?.disconnect()
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+// æ ¹æ®BLEåè®®ï¼ŒæŠŠUUIDæ”¹ä¸ºçŸ­å†™æ¨¡å¼ï¼Œæ–¹ä¾¿æ“ä½œ
+export const getShortUUID = (src: string): string => {
+  const regex = /0000(\w{4})-/g
+  const matches = regex.exec(src)
+  return matches != null ? matches[1] : src
+}
+
+const strToArrayBuffer = (str: string): ArrayBuffer => {
+  return buffer.from(str.toUpperCase().match(/[0-9A-F]{2}/g).map(s => parseInt(s, 16))).buffer
+}
+
+
+const arrayBufferToString = (buff: ArrayBuffer): string => {
+  let temp = ""
+  let arr = new Uint8Array(buff)
+  for (let i = 0; i < arr.byteLength; i++) {
+    temp += arr[i].toString(16)
+  }
+  return temp
+}
+
+
+const findTargetCharacteristic = (characteristicUUID: string): ble.BLECharacteristic | undefined => {
+  let targetCharacteristic: ble.BLECharacteristic | undefined = undefined
+
+  serviceList.forEach(service => {
+    service.characteristics.forEach(characteristic => {
+      if (getShortUUID(characteristic.characteristicUuid) == characteristicUUID) {
+        targetCharacteristic = characteristic
+      }
+    })
+  })
+
+  if (targetCharacteristic == undefined) {
+    console.error(`characteristic ${characteristicUUID} not found`)
+  }
+
+  return targetCharacteristic
+}
+
+
+export const readCharacteristic = async (characteristicUUID: string): Promise<string | undefined> => {
+  try {
+    let result = await connectedDevice?.readCharacteristicValue(findTargetCharacteristic(characteristicUUID))
+    // return arrayBufferToString(result?.characteristicValue)
+    return arrToStr(result?.characteristicValue)
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+// å‘é€éŸ³ä¹æŒ‡ä»¤
+export const writeMusicCharacteristic = async (writeValue: string) => {
+  let targetCharacteristic = findTargetCharacteristic("FFF3")
+  targetCharacteristic.characteristicValue = strToBuffer(writeValue)
+  try {
+    await connectedDevice?.writeCharacteristicValue(targetCharacteristic, ble.GattWriteType.WRITE)
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+// å‘é€ç¯æ§æŒ‡ä»¤
+export const writeLightCharacteristic = async (arr: Array<string>) => {
+  let targetCharacteristic = findTargetCharacteristic("FFF1")
+  targetCharacteristic.characteristicValue = convertToArrayBuffer(arr)
+  try {
+    await connectedDevice?.writeCharacteristicValue(targetCharacteristic, ble.GattWriteType.WRITE)
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+export const subscribeCharacteristic = (characteristicUUID: string) => {
+  try {
+    connectedDevice?.setCharacteristicChangeNotification(findTargetCharacteristic(characteristicUUID), true)
+  } catch (err) {
+    console.error(`errCode: ${err.code}, errMessage: ${err.message}`)
+  }
+}
+
+/**
+ * ASCII è§£ç ï¼šArrayBuffer è½¬ String
+ * @param arrayBuffer å¾…è§£ç çš„äºŒè¿›åˆ¶ç¼“å†²åŒº
+ * @returns è§£ç åçš„ ASCII å­—ç¬¦ä¸²ï¼ˆè¶…å‡º ASCII èŒƒå›´çš„å­—èŠ‚ä¼šè½¬ä¸ºå¯¹åº”å­—ç¬¦ï¼‰
+ */
+function arrToStr(arrayBuffer: ArrayBuffer): string {
+  // 1. å°† ArrayBuffer è½¬ä¸º Uint8Array äºŒè¿›åˆ¶è§†å›¾ï¼Œä¾¿äºéå†å­—èŠ‚
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let resultStr = "";
+
+  // 2. éå†å­—èŠ‚ï¼Œå°†æ¯ä¸ªå­—èŠ‚è½¬ä¸ºå¯¹åº”çš„ ASCII å­—ç¬¦
+  for (let i = 0; i < uint8Array.length; i++) {
+    // String.fromCharCodeï¼šå°†å­—èŠ‚å€¼ï¼ˆ0-127ï¼‰è½¬ä¸ºå¯¹åº” ASCII å­—ç¬¦
+    resultStr += String.fromCharCode(uint8Array[i]);
+  }
+
+  return resultStr;
+
+
+}
+
+/**
+ *  ArrayBuffer ç±»å‹è¿”å›
+ * @param arr å­—ç¬¦ä¸²æ•°ç»„ï¼ˆå¦‚ ["[", "T", "0x00", "]"]ï¼‰
+ * @returns ArrayBuffer äºŒè¿›åˆ¶ç¼“å†²åŒºï¼Œè½¬æ¢å¤±è´¥è¿”å› null
+ */
+function convertToArrayBuffer(arr: string[]): ArrayBuffer | null {
+  const byteList: number[] = []; // å…ˆå­˜å‚¨å­—èŠ‚æ•°å€¼ï¼ˆ0-255ï¼‰ï¼Œåç»­è½¬ä¸º Uint8Array
+
+  for (const element of arr) {
+    let byteValue: number;
+
+    if (element.startsWith("0x")) {
+      // å¤„ç†åå…­è¿›åˆ¶å­—ç¬¦ä¸²ï¼ˆå¦‚ "0x00" -> 0x00ï¼‰
+      try {
+        // æˆªå– "0x" åçš„éƒ¨åˆ†ï¼Œè½¬ä¸º16è¿›åˆ¶æ•´æ•°
+        const hexStr = element.substring(2);
+        const intValue = parseInt(hexStr, 16);
+        // éªŒè¯å­—èŠ‚èŒƒå›´ï¼ˆ-128 ~ 127ï¼Œå¯¹åº” Byte ç±»å‹ï¼‰
+        if (intValue < -128 || intValue > 255) {
+          console.log(`è¶…å‡ºå­—èŠ‚èŒƒå›´çš„åå…­è¿›åˆ¶å€¼ï¼š${element}`);
+          return null;
+        }
+        // è½¬æ¢ä¸º Byte å¯¹åº”çš„æ•°å€¼ï¼ˆå¤„ç†æ— ç¬¦å·/æœ‰ç¬¦å·å…¼å®¹ï¼‰
+        byteValue = intValue > 127 ? intValue - 256 : intValue;
+      } catch (e) {
+        console.log(`æ— æ•ˆçš„åå…­è¿›åˆ¶å€¼ï¼š${element}ï¼Œå¼‚å¸¸ä¿¡æ¯ï¼š${e}`);
+        return null;
+      }
+    } else {
+      // å¤„ç†æ™®é€šå­—ç¬¦ï¼ˆå–ç¬¬ä¸€ä¸ªå­—ç¬¦çš„ ASCII ç ï¼‰
+      if (element.length === 0) {
+        console.log("ç©ºå­—ç¬¦ä¸²æ— æ³•è½¬æ¢ä¸ºå­—èŠ‚");
+        return null;
+      }
+      // è·å–ç¬¬ä¸€ä¸ªå­—ç¬¦çš„ ASCII ç ï¼Œè½¬ä¸º Byte ç±»å‹
+      byteValue = element.charCodeAt(0) & 0xFF; // ç¡®ä¿åœ¨å­—èŠ‚èŒƒå›´å†…
+    }
+
+    byteList.push(byteValue);
+  }
+
+  // å°†å­—èŠ‚æ•°å€¼åˆ—è¡¨è½¬ä¸º Uint8Arrayï¼Œå†è·å– ArrayBuffer è¿”å›
+  const uint8Array = new Uint8Array(byteList);
+  return uint8Array.buffer;
+}
+
+
+function strToBuffer(str: string): ArrayBuffer {
+  // 1. åˆ›å»º TextEncoder å®ä¾‹ï¼Œé»˜è®¤ç¼–ç ä¸º UTF-8
+  const encoder = new util.TextEncoder();
+  // 2. å°†å­—ç¬¦ä¸²ç¼–ç ä¸º Uint8Array å­—èŠ‚æ•°ç»„
+  const uint8Array = encoder.encode(str);
+  // 3. æå– Uint8Array å¯¹åº”çš„ ArrayBuffer
+  return uint8Array.buffer;
+}ÀÔrD—¶@ohos.bluetooth.access³@ohos.bluetooth.ble¸@ohos.bluetooth.constant·@ohos.abilityAccessCtrlº@ohos.bundle.bundleManager¬@ohos.bufferª@ohos.utilÔrE—ªassertions¨external¢id¤meta±moduleSideEffectsªresolvedByµsyntheticNamedExportsAÃÙs hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bluetooth.access.d.tsAÃªoh-resolveÂEAÃÙp hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bluetooth.ble.d.tsÔrF‘¯hostModulesInfo‘C³@ohos.bluetooth.ble¥entryÃªoh-resolveÂEAÃÙu hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bluetooth.constant.d.tsF‘C¸@ohos.bluetooth.constant¥entryÃªoh-resolveÂEAÃÙt hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.abilityAccessCtrl.d.tsAÃªoh-resolveÂEAÃÙw hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.bundle.bundleManager.d.tsF‘Cº@ohos.bundle.bundleManager¥entryÃªoh-resolveÂEAÃÙi hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.buffer.d.tsF‘C¬@ohos.buffer¥entryÃªoh-resolveÂEAÃÙg hvigor_ignore__Applications_DevEco-Studio.app_Contents_sdk_default_openharmony_ets_api_@ohos.util.d.tsF‘Cª@ohos.util¥entryÃªoh-resolveÂ“ÔrG–§version¤fileªsourceRoot§sources¥names¨mappings©helper.js ‘©helper.tsÜ4–”    ”  	”  ”  &”+  <”,  <–”    ”  ”
+  ”  &”%  <”&  <–”    ”  ”  ”  &”/  <”0  <–”   ” 	” ” 0”7 ÌA”8 ÌA–”   ” 	” ” ”6 /”7 /–”   ” 	” ” ”! )”" )–”   ” ” ” ” )” )””   ” ” ” š” ” ” ” ” ” ”( &”) '”2 0”3 0’” ” ˜” 	” 	” 	” 	” 	”" 	”$ 	 ”% 	 š” 
+” 
+” 
+” 
+” 
+”. 
+*”6 
+2”8 
+4”9 
+5”: 
+5‘” ”” ” ” ” ’” ” 
+Ü ” ” ” ” ” ”. *”1 -”2 .”6 2”ÌG ÌC”ÌJ ÌF”ÌK ÌG”ÌR ÌN”ÌT ÌP”ÌU ÌQ”ÌV ÌQ‘” ”” ” 	” ” ’”   ” –”   ” ” ” ” ”$ $’” ” –” ” ” ” ” ” š” ” ” ” 3”' ÌD”( ÌE”3 ÌP”4 ÌQ”ÌE Ìb”ÌF Ìb’” ” ’” ” Ü ” ” ” ”  ”! ”5 /”6 0”ÌC =”ÌD >”ÌN ÌH”ÌO ÌI”Ìo Ìi”Ìp Ìj”Ìq Ìk”Ìr Ìl”Ìy Ìs”Ìz Ìt”Ì‡ Ì”Ìˆ Ì’” ” ’” ” ” ” ”# ”$ ”3 -”5 /”6 0”ÌF Ì@”ÌG ÌA”ÌN ÌH”ÌP ÌJ”Ìr Ìl”Ìs Ìm”Ìt Ìm‘” ”” ” ” ” Ü ” ” ” ” ” ”1 -”4 0”5 1”9 5”ÌJ ÌF”ÌM ÌI”ÌN ÌJ”ÌU ÌQ”ÌW ÌS”ÌX ÌT”ÌY ÌU‘” ””  ”  	”  ”  ’”  ! ” !˜”  # ” #” #” #” #”# ##”$ #$”+ #ÌDÜ ” $” $” $” %” %” %”) %”* %”> %-”? %.”ÌL %;”ÌM %<”ÌW %ÌF”ÌX %ÌG”Ìx %Ìg”Ìy %Ìh”Ìz %Ìi”Ì{ %Ìj”Ì‚ %Ìq”Ìƒ %Ìr”Ì‡ %Ìv”Ìˆ %Ìvš” &” &	” &
+” &” &”  &”* &(”, &*”- &+”. &+”” '” '” '” '”” (” (” (”. (*”” )” )” )”; )7”” *” *” *	”% *!“” +” +” +–” ,” ,” ,”" ,”# ,”4 ,.‘”	 -’” .” .Ÿ” 0”
+ 0” 0” 0” 0” 0”' 0%”( 0&”) 0'”. 0,”/ 0-”0 0.”3 0Ì@”5 0ÌB”7 0ÌDÜ ” 1” 1” 1” 1” 1”/ 1+”2 1.”3 1/”7 13”ÌH 1ÌD”ÌK 1ÌG”ÌL 1ÌH”ÌS 1ÌO”ÌU 1ÌQ”ÌV 1ÌR”ÌW 1ÌR”” 2” 2” 2” 2’”  3 ” 3Ü ”  5 ” 5” 5” 5” 5”& 5&”' 5'”. 5ÌG”0 6”ÌD 6 ”ÌH 6$”ÌJ 7”Ì] 7”Ìa 7#”Ìc 8”Ìt 8”Ìx 8!™” 9” 9” 9” 9” 9”( 9&”) 9'”8 96”: 98™”	 :”# :”$ : ”+ :'”- :)”. :*”ÌP :ÌL”ÌQ :ÌM”ÌR :ÌNÜ ”	 ;” ;
+” ;” ;” ;” ; ” ;"” ;#” ;*”  ;+”% ;0”& ;1”2 ;=”5 ;Ì@”6 ;ÌA”: ;ÌE”ÌK ;ÌV”ÌN ;ÌY”ÌO ;ÌZ”ÌV ;Ìa”ÌX ;Ìc”ÌY ;Ìd”ÌZ ;Ìe”Ì[ ;Ìe”” <” <” <” <›” =” =” =” =”  =”! =”, =(”- =)”. =*”/ =+”0 =+š” >” >” >” >” >”& >"”1 >-”3 >/”4 >0”5 >0–” Ì@” Ì@” Ì@” Ì@” Ì@” Ì@”” ÌA” ÌA
+”! ÌA”# ÌA”” ÌB”! ÌB”# ÌB”$ ÌB‘” ÌC‘”	 ÌD‘” ÌD” ÌE” ÌE
+” ÌE” ÌE”) ÌE#”- ÌE'”3 ÌE-”4 ÌE.”ÌF ÌEÌ@”ÌG ÌEÌA”ÌH ÌEÌB”ÌI ÌEÌC”ÌK ÌEÌE’” ÌF” ÌF”” ÌG” ÌG”$ ÌG”& ÌG”” ÌH
+”$ ÌH”& ÌH”' ÌH‘” ÌI	‘” ÌJ‘” ÌJ”” ÌK” ÌK”" ÌK”$ ÌK”” ÌL
+”" ÌL”$ ÌL”% ÌL‘” ÌM	‘” ÌN‘”	 ÌO‘” ÌP‘”	 ÌP	˜” ÌQ” ÌQ” ÌQ” ÌQ” ÌQ”  ÌQ”! ÌQ”" ÌQ‘” ÌR’”  ÌS ” ÌS™”  ÌU ” ÌU” ÌU” ÌU” ÌU” ÌU”  ÌU ”0 ÌU:”4 ÌU>š” ÌV”
+ ÌV” ÌV	” ÌV” ÌV” ÌV” ÌV”" ÌV ”# ÌV!”% ÌV#š” ÌW” ÌW” ÌW” ÌW” ÌW” ÌW”* ÌW&”+ ÌW'”3 ÌW/”5 ÌW1˜” ÌX” ÌX” ÌX” ÌX” ÌX”$ ÌX”% ÌX”& ÌX”” ÌY” ÌY
+” ÌY” ÌY”” ÌZ” ÌZ” ÌZ”  ÌZ‘” Ì[‘”	 Ì\š” Ì]” Ì]” Ì]” Ì]” Ì]”, Ì](”1 Ì]-”3 Ì]/”4 Ì]0”5 Ì]0”” Ì^” Ì^” Ì^” Ì^’” Ì`” Ì`˜” Ìa” Ìa” Ìa” Ìa” Ìa”! Ìa”" Ìa”# Ìa–” Ìb” Ìb
+” Ìb” Ìb”  Ìb”! Ìb‘” Ìc”” Ìc” Ìc” Ìc” ÌcÜ ” Ìd” Ìd” Ìd” Ìd” Ìd”2 Ìd.”5 Ìd1”6 Ìd2”: Ìd6”ÌK ÌdÌG”ÌN ÌdÌJ”ÌO ÌdÌK”ÌV ÌdÌR”ÌX ÌdÌT”ÌY ÌdÌU”ÌZ ÌdÌU‘” Ìe’”  Ìf ” Ìf˜”  Ìn ” Ìn” Ìn” Ìn” Ìn”" Ìn"”# Ìn#”5 ÌnÌQš” Ìo” Ìo” Ìo”
+ Ìo” Ìo	” Ìo” Ìo”& Ìo$”' Ìo%”) Ìo'Ü ” Ìp” Ìp” Ìp”% Ìp!”& Ìp"”, Ìp(”- Ìp)”3 Ìp/”4 Ìp0”6 Ìp2”7 Ìp3”= Ìp9”> Ìp:”ÌI ÌpÌE”ÌJ ÌpÌF”ÌK ÌpÌG”ÌN ÌpÌJ”ÌO ÌpÌK”ÌU ÌpÌQ”ÌV ÌpÌR”ÌX ÌpÌT”ÌY ÌpÌU”ÌZ ÌpÌVÜ ” Ìq” Ìq
+” Ìq” Ìq” Ìq”# Ìq”% Ìq”) Ìq#”+ Ìq%”1 Ìq+”2 Ìq,”6 Ìq0”8 Ìq2”ÌB Ìq<”ÌD Ìq>”ÌJ ÌqÌD”ÌK ÌqÌE”ÌS ÌqÌM•”	 Ìr”
+ Ìr” Ìs” Ìs” Ìs”” Ìt” Ìt” Ìt” Ìt’” Ìu” Ìu˜” Ìv” Ìv” Ìv” Ìv” Ìv”& Ìv"”' Ìv#”( Ìv#™” Ìw” Ìw” Ìw” Ìw” Ìw” Ìw” Ìw” Ìw” Ìw”” Ìx” Ìx” Ìx” Ìx˜” Ìy” Ìy” Ìy” Ìy” Ìy”" Ìy”# Ìy”6 Ìy0˜” Ìz” Ìz” Ìz” Ìz” Ìz”$ Ìz”% Ìz”: Ìz4“”	 Ì{”
+ Ì{” Ì{‘” Ì|”” Ì|” Ì|” Ì|” Ì|Ü ” Ì}” Ì}” Ì}” Ì}” Ì}”" Ì}”% Ì}!”& Ì}"”* Ì}&”; Ì}7”> Ì}:”? Ì};”ÌF Ì}ÌB”ÌH Ì}ÌD”ÌI Ì}ÌE”ÌJ Ì}ÌE‘” Ì~’”  Ì ” Ì””  Ì ” Ì” Ì” Ì’” Ì‚” Ì‚˜” Ìƒ” Ìƒ” Ìƒ” Ìƒ” Ìƒ”% Ìƒ!”& Ìƒ"”' Ìƒ"–” Ì„” Ì„” Ì„” Ì„” Ì„” Ì„‘” Ì…”” Ì…” Ì…” Ì…” Ì…Ü ” Ì†” Ì†” Ì†” Ì†” Ì†”" Ì†”% Ì†!”& Ì†"”* Ì†&”; Ì†7”> Ì†:”? Ì†;”ÌF Ì†ÌB”ÌH Ì†ÌD”ÌI Ì†ÌE”ÌJ Ì†ÌE‘” Ì‡’”  Ìˆ ” Ìˆ–”  ÌŠ ” ÌŠ” ÌŠ” ÌŠ8” ÌŠÌA”  ÌŠÌA–”  Ì‹ ” Ì‹” Ì‹” Ì‹*” Ì‹,” Ì‹,Ü ”  Ì ” Ì” Ì” Ì” Ì”% Ì%”& Ì&”0 Ì8”2 Ì:”ÌF ÌÌX”ÌJ ÌÌ\”ÌL Ì”Ìc Ì#”Ìg Ì'”Ìi Ì”Ì| Ì7”Ì€ Ì;”Ì‚ Ì”Ì¡ Ì+”Ì¥ Ì/š” Ì‘” Ì‘” Ì‘” Ì‘” Ì‘”0 Ì‘.”1 Ì‘/”; Ì‘9”< Ì‘:”= Ì‘:œ” Ì’” Ì’” Ì’” Ì’” Ì’”2 Ì’0”4 Ì’2”9 Ì’7”; Ì’9”Ì@ Ì’Ì\”ÌB Ì’Ì^”ÌD Ì’Ì`˜” Ì“” Ì“” Ì“” Ì“3”  Ì“8”! Ì“9”& Ì“>”' Ì“>š” Ì”” Ì”” Ì”” Ì””% Ì”!”& Ì”"”< Ì”8”= Ì”9”ÌL Ì”ÌH”ÌN Ì”ÌJ”” Ì•” Ì•
+”! Ì•”# Ì•”” Ì–”! Ì–”# Ì–”$ Ì–‘” Ì—›” Ì˜” Ì˜” Ì˜” Ì˜”  Ì˜”9 Ì˜3”; Ì˜5”< Ì˜6”ÌJ Ì˜Ì[”ÌL Ì˜Ì]”ÌN Ì˜Ì_”” Ì™” Ì™”0 Ì™(”2 Ì™*Ü ” Ìš
+”0 Ìš&”1 Ìš'”= Ìš3”> Ìš4”ÌL ÌšÌB”ÌM ÌšÌC”Ì_ ÌšÌU”Ì` ÌšÌV”Ìb Ì›”Ìu Ì›”Ìv Ì› ”Ì„ Ì›.”Ì… Ì›/”Ì˜ Ì›ÌB”Ì™ Ì›ÌC”Ìš Ì›ÌD”Ì› Ì›ÌD‘” Ìœ	”” Ì” Ì” Ì” Ì™” Ì” Ì” Ì”  Ì”/ Ì)”1 Ì+”< Ì6”> Ì8”? Ì8”” ÌŸ” ÌŸ
+”  ÌŸ”" ÌŸ–” Ì ”  Ì ”! Ì ”, Ì $”- Ì %”. Ì %‘” Ì¡‘”	 Ì¢š” Ì¢” Ì¢” Ì¢”" Ì¢ ”* Ì¢(”+ Ì¢)”ÌA Ì¢?”ÌB Ì¢Ì@”ÌT Ì¢ÌR”ÌV Ì¢ÌT”” Ì£” Ì£
+”$ Ì£”& Ì£ ”” Ì¤”$ Ì¤”& Ì¤”' Ì¤‘” Ì¥’” Ì¦” Ì¦–” Ì§” Ì§” Ì§”" Ì§”$ Ì§”% Ì§•” Ì¨” Ì¨” Ì¨”" Ì¨”# Ì¨‘”	 Ì©”” Ìª” Ìª” Ìª” Ìª’” Ì¬” Ì¬–” Ì­” Ì­” Ì­”  Ì­”" Ì­”# Ì­‘” Ì®”” Ì®” Ì®” Ì®” Ì®Ü ” Ì¯” Ì¯” Ì¯” Ì¯” Ì¯”" Ì¯”% Ì¯!”& Ì¯"”* Ì¯&”; Ì¯7”> Ì¯:”? Ì¯;”ÌF Ì¯ÌB”ÌH Ì¯ÌD”ÌI Ì¯ÌE”ÌJ Ì¯ÌE‘” Ì°”” Ì±” Ì±	” Ì±” Ì±’”  Ì² ” Ì²–”  Ì´ ” Ì´” Ì´” Ì´” Ì´”& Ì´&’” Ìµ” Ìµ–” Ì¶” Ì¶” Ì¶”# Ì¶”% Ì¶!”& Ì¶!‘” Ì·”” Ì·” Ì·” Ì·” Ì·Ü ” Ì¸” Ì¸” Ì¸” Ì¸” Ì¸”" Ì¸”% Ì¸!”& Ì¸"”* Ì¸&”; Ì¸7”> Ì¸:”? Ì¸;”ÌF Ì¸ÌB”ÌH Ì¸ÌD”ÌI Ì¸ÌE”ÌJ Ì¸ÌE‘” Ì¹’”  Ìº ” Ìº’”  Ì¼ ” Ì¼š”  Ì½ ” Ì½” Ì½” Ì½” Ì½” Ì½” Ì½”  Ì½(”" Ì½2”$ Ì½4–” Ì¾”
+ Ì¾” Ì¾” Ì¾”! Ì¾”" Ì¾›” Ì¿”
+ Ì¿” Ì¿” Ì¿” Ì¿” Ì¿” Ì¿” Ì¿”" Ì¿ ”# Ì¿!”$ Ì¿!Ü ” ÌÀ” ÌÀ	” ÌÀ” ÌÀ” ÌÀ” ÌÀ” ÌÀ” ÌÀ”$ ÌÀ"”% ÌÀ#”& ÌÀ$”' ÌÀ%”( ÌÀ&”) ÌÀ'”* ÌÀ(”- ÌÀ+”. ÌÀ+“”  ÌÁ ” ÌÁ” ÌÁ˜”  ÌÃ ” ÌÃ” ÌÃ” ÌÃ” ÌÃ” ÌÃ%” ÌÃ4”! ÌÃ6Ü !” ÌÄ” ÌÄ	” ÌÄ” ÌÄ” ÌÄ” ÌÄ” ÌÄ” ÌÄ”& ÌÄ$”( ÌÄ&”) ÌÄ'”. ÌÄ,”/ ÌÄ-”= ÌÄ;”> ÌÄ<”? ÌÄ=”ÌB ÌÄÌ@”ÌC ÌÄÌA”ÌD ÌÄÌB”ÌE ÌÄÌC”ÌG ÌÄÌE”ÌH ÌÄÌF”ÌP ÌÄÌN”ÌQ ÌÄÌO”ÌR ÌÄÌP”ÌT ÌÄÌR”ÌV ÌÄÌT”ÌW ÌÄÌU”ÌX ÌÄÌV”ÌY ÌÄÌW”ÌZ ÌÄÌX”Ì` ÌÄÌ^”Ìa ÌÄÌ^“”  ÌÅ ” ÌÅ” ÌÅ˜”  ÌÈ ” ÌÈ” ÌÈ” ÌÈ” ÌÈ”! ÌÈ.”# ÌÈ8”% ÌÈ:–” ÌÉ” ÌÉ” ÌÉ
+” ÌÉ” ÌÉ” ÌÉš” ÌÊ” ÌÊ” ÌÊ	” ÌÊ” ÌÊ” ÌÊ” ÌÊ”! ÌÊ”" ÌÊ ”# ÌÊ Ü ” ÌË”	 ÌË” ÌË” ÌË” ÌË” ÌË” ÌË” ÌË” ÌË” ÌË” ÌË”& ÌË$”( ÌË&”) ÌË'”+ ÌË)”- ÌË+” ÌÌ” ÌÌ” ÌÌ” ÌÌ” ÌÌ” ÌÌ” ÌÌ” ÌÌ” ÌÌ”  ÌÌ”" ÌÌ”# ÌÌ”$ ÌÌ‘” ÌÍ”” ÌÎ” ÌÎ	” ÌÎ” ÌÎ“”  ÌÏ ” ÌÏ” ÌÏ˜”  ÌÒ ” ÌÒ” ÌÒ”! ÌÒ!”" ÌÒ"”4 ÌÒ<”6 ÌÒÌa”8 ÌÒÌc–” ÌÓ” ÌÓ” ÌÓ” ÌÓÌ@”( ÌÓÌI”) ÌÓÌI˜” ÌÕ” ÌÕ” ÌÕ” ÌÕ” ÌÕ” ÌÕ”  ÌÕ”" ÌÕ š” ÌÖ” ÌÖ” ÌÖ” ÌÖ”  ÌÖ”' ÌÖ#”( ÌÖ$”6 ÌÖ2”7 ÌÖ3”9 ÌÖ5›” Ì×” Ì×
+” Ì×” Ì×”+ Ì×%”, Ì×&”> Ì×8”? Ì×9”ÌC Ì×=”ÌU Ì×ÌO”ÌW Ì×ÌQ•” ÌØ”$ ÌØ”' ÌØ”5 ÌØ-”6 ÌØ-‘” ÌÙ”” ÌÚ”	 ÌÚ”
+ ÌÚ” ÌÚ”” ÌÛ” ÌÛ” ÌÛ” ÌÛ–” Ìİ” Ìİ” Ìİ”  Ìİ”) Ìİ'”+ Ìİ)š” ÌŞ” ÌŞ” ÌŞ” ÌŞ” ÌŞ”( ÌŞ$”: ÌŞ6”ÌF ÌŞÌB”ÌG ÌŞÌC”ÌH ÌŞÌC‘” Ìß”” Ìá” Ìá	” Ìá”  Ìá“”  Ìâ ” Ìâ” Ìâ›”  Ìå ” Ìå” Ìå” Ìå” Ìå”" Ìå"”' Ìå'”) Ìå)”; ÌåÌC”= ÌåÌb”? ÌåÌd’” Ìæ” ÌæŸ” Ìç” Ìç” Ìç” Ìç” Ìç”* Ìç&”, Ìç(”ÌC Ìç?”ÌD ÌçÌ@”Ì\ ÌçÌX”Ì] ÌçÌY”Ìo ÌçÌk”Ìp ÌçÌl”Ìq ÌçÌm”Ìr ÌçÌm’” Ìè”ÌB Ìè>™” Ìé” Ìé” Ìé” Ìé” Ìé”  Ìé”3 Ìé/”4 Ìé0”5 Ìé0‘” Ìê”” Ìê” Ìê” Ìê” ÌêÜ ” Ìë” Ìë” Ìë” Ìë” Ìë”" Ìë”% Ìë!”& Ìë"”* Ìë&”; Ìë7”> Ìë:”? Ìë;”ÌF ÌëÌB”ÌH ÌëÌD”ÌI ÌëÌE”ÌJ ÌëÌE‘” Ìì“”  Ìí ” Ìí” Ìí’”  Ìï ”	 Ìï	›”  Ìğ ” Ìğ” Ìğ” Ìğ”% Ìğ%”( Ìğ(”- Ìğ-”/ Ìğ/”9 ÌğÌA”; ÌğÌC”= ÌğÌE™” Ìñ” Ìñ” Ìñ” Ìñ”7 Ìñ5”8 Ìñ6”> Ìñ<”? Ìñ=”Ì@ Ìñ=š” Ìò” Ìò” Ìò”, Ìò*”/ Ìò-”: Ìò8”; Ìò9”ÌE ÌòÌC”ÌF ÌòÌD”ÌG ÌòÌD’” Ìó” ÌóŸ” Ìô” Ìô
+” Ìô” Ìô”7 Ìô3”8 Ìô4”ÌL ÌôÌH”ÌN ÌôÌJ”ÌQ ÌôÌM”ÌR ÌôÌN”Ì_ ÌôÌ[”Ì` ÌôÌ\”Ìe ÌôÌa”Ìf ÌôÌb”Ìg ÌôÌb‘” Ìõ”” Ìõ” Ìõ” Ìõ” ÌõÜ ” Ìö” Ìö” Ìö” Ìö” Ìö”" Ìö”% Ìö!”& Ìö"”* Ìö&”; Ìö7”> Ìö:”? Ìö;”ÌF ÌöÌB”ÌH ÌöÌD”ÌI ÌöÌE”ÌJ ÌöÌE‘” Ì÷“”  Ìø ” Ìø” Ìø’”  Ìú ”	 Ìú	›”  Ìû ” Ìû” Ìû” Ìû”% Ìû%”( Ìû(”- Ìû-”/ Ìû/”2 ÌûÌA”4 ÌûÌC”6 ÌûÌE™” Ìü” Ìü” Ìü” Ìü”7 Ìü5”8 Ìü6”> Ìü<”? Ìü=”Ì@ Ìü=š” Ìı” Ìı” Ìı”, Ìı*”/ Ìı-”ÌC ÌıÌA”ÌD ÌıÌB”ÌG ÌıÌE”ÌH ÌıÌF”ÌI ÌıÌF’” Ìş” ÌşŸ” Ìÿ” Ìÿ
+” Ìÿ” Ìÿ”7 Ìÿ3”8 Ìÿ4”ÌL ÌÿÌH”ÌN ÌÿÌJ”ÌQ ÌÿÌM”ÌR ÌÿÌN”Ì_ ÌÿÌ[”Ì` ÌÿÌ\”Ìe ÌÿÌa”Ìf ÌÿÌb”Ìg ÌÿÌb‘” Í ”” Í ” Í ” Í ” Í Ü ” Í” Í” Í” Í” Í”" Í”% Í!”& Í"”* Í&”; Í7”> Í:”? Í;”ÌF ÍÌB”ÌH ÍÌD”ÌI ÍÌE”ÌJ ÍÌE‘” Í“”  Í ” Í” Íš”  Í ” Í” Í” Í”$ Í$”' Í'”( Í(”: ÍÌB”< ÍÌD”> ÍÌF’” Í” Í” Í” Í” Í”< Í8”= Í9”ÌU ÍÌQ”ÌV ÍÌR”Ìh ÍÌd”Ìi ÍÌe”Ìk ÍÌg”Ìo ÍÌk”Ìp ÍÌl”Ìq ÍÌl‘” Í”” Í” Í” Í” ÍÜ ” Í	” Í	” Í	” Í	” Í	”" Í	”% Í	!”& Í	"”* Í	&”; Í	7”> Í	:”? Í	;”ÌF Í	ÌB”ÌH Í	ÌD”ÌI Í	ÌE”ÌJ Í	ÌE‘” Í
+“”  Í ” Í” Í‘”  Í ‘” Í•”  Í ”	 Í	” Í” Í” Í*’” Í”2 Í0š” Í”
+ Í” Í” Í” Í”% Í#”& Í$”1 Í/”2 Í0”3 Í1–” Í” Í” Í” Í” Í” Í’” Í”" Í Ü ” Í”	 Í” Í” Í” Í” Í” Í” Í” Í”" Í ”# Í!”) Í'”+ Í)”, Í*”. Í,”0 Í.’” Í”7 Í3” Í” Í” Í” Í” Í”( Í$”) Í%”3 Í/”4 Í0”5 Í1”6 Í2”7 Í3”8 Í4‘” Í”” Í” Í	” Í” Í’”  Í  ” Í ‘”  Í" ‘” Í&•”  Í' ”	 Í'	” Í'” Í'”! Í'+˜” Í(”
+ Í(” Í(” Í(” Í(” Í( ” Í(!”: Í(ÌB—” Í*”	 Í*” Í*” Í*” Í*” Í*” Í*”” Í+” Í+” Í+” Í+™” Í-” Í-” Í-” Í-” Í-” Í-”# Í-”$ Í- ”& Í-"’” Í.”* Í.$’” Í/” Í/
+’” Í0”( Í0 ›” Í1” Í1” Í1” Í1”& Í1”' Í1”0 Í1(”1 Í1)”2 Í1*”3 Í1+”4 Í1,›” Í2” Í2” Í2”! Í2”) Í2!”* Í2"”0 Í2(”2 Í2*”4 Í2,”5 Í2-”6 Í2.’” Í3”0 Í3(›” Í4” Í4” Í4” Í4”  Í4”# Í4”' Í4”/ Í4'”2 Í4*”5 Í4-”7 Í4/š” Í5
+” Í5” Í5” Í5”  Í5”0 Í5&”7 Í5-”9 Í5/”: Í50”; Í51”” Í6
+” Í6” Í6”  Í6‘” Í7	’” Í8”. Í8&Ü ” Í9” Í9” Í9”$ Í9”' Í9”* Í9"”+ Í9#”, Í9$”- Í9%”5 Í9-”8 Í90”; Í93”< Í94”= Í95”> Í96”ÌF Í9>”ÌG Í9?‘” Í:”” Í:” Í:” Í:” Í:œ” Í;” Í;” Í;” Í;” Í;”( Í; ”/ Í;'”8 Í;0”9 Í;1”; Í;3”< Í;4”= Í;5”” Í<” Í<” Í<” Í<‘” Í=‘”	 Í>‘” Í>’” Í?”& Í? ˜” Í@” Í@
+” Í@” Í@” Í@”# Í@”$ Í@”& Í@ ˜” ÍA” ÍA” ÍA” ÍA” ÍA”) ÍA!”* ÍA"”+ ÍA#”” ÍB” ÍB” ÍB” ÍB‘” ÍC’” ÍD”* ÍD$” ÍE” ÍE” ÍE” ÍE”  ÍE”* ÍE$”+ ÍE%”, ÍE&”- ÍE'”0 ÍE*”4 ÍE.”5 ÍE/”6 ÍE0”ÌA ÍE;‘”	 ÍF˜” ÍH” ÍH” ÍH” ÍH” ÍH” ÍH”  ÍH”! ÍH‘” ÍI’” ÍK”. ÍK,š” ÍL”
+ ÍL” ÍL” ÍL” ÍL”% ÍL#”& ÍL$”. ÍL,”/ ÍL-”0 ÍL.–” ÍM” ÍM	” ÍM” ÍM” ÍM” ÍM’”  ÍN ” ÍN•”  ÍQ ”	 ÍQ	” ÍQ” ÍQ” ÍQ ’” ÍR”' ÍR%š” ÍS”
+ ÍS” ÍS” ÍS” ÍS” ÍS” ÍS”( ÍS&”* ÍS(”+ ÍS)’” ÍT”! ÍT›” ÍU”
+ ÍU” ÍU” ÍU” ÍU” ÍU”% ÍU#”& ÍU$”) ÍU'”* ÍU(”+ ÍU)’” ÍV”' ÍV%–” ÍW” ÍW	” ÍW” ÍW” ÍW” ÍW’”  ÍX ” ÍXÔrH–§version¤file§sources®sourcesContent¥names¨mappingsÀ‘À‘ÀÜ5‘”    ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”  	 ‘”  
+ ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”    ‘”  ! ‘”  " ‘”  # ‘”  $ ‘”  % ‘”  & ‘”  ' ‘”  ( ‘”  ) ‘”  * ‘”  + ‘”  , ‘”  - ‘”  . ‘”  / ‘”  0 ‘”  1 ‘”  2 ‘”  3 ‘”  4 ‘”  5 ‘”  6 ‘”  7 ‘”  8 ‘”  9 ‘”  : ‘”  ; ‘”  < ‘”  = ‘”  > ‘”  ? ‘”  Ì@ ‘”  ÌA ‘”  ÌB ‘”  ÌC ‘”  ÌD ‘”  ÌE ‘”  ÌF ‘”  ÌG ‘”  ÌH ‘”  ÌI ‘”  ÌJ ‘”  ÌK ‘”  ÌL ‘”  ÌM ‘”  ÌN ‘”  ÌO ‘”  ÌP ‘”  ÌQ ‘”  ÌR ‘”  ÌS ‘”  ÌT ‘”  ÌU ‘”  ÌV ‘”  ÌW ‘”  ÌX ‘”  ÌY ‘”  ÌZ ‘”  Ì[ ‘”  Ì\ ‘”  Ì] ‘”  Ì^ ‘”  Ì_ ‘”  Ì` ‘”  Ìa ‘”  Ìb ‘”  Ìc ‘”  Ìd ‘”  Ìe ‘”  Ìf ‘”  Ìg ‘”  Ìh ‘”  Ìi ‘”  Ìj ‘”  Ìk ‘”  Ìl ‘”  Ìm ‘”  Ìn ‘”  Ìo ‘”  Ìp ‘”  Ìq ‘”  Ìr ‘”  Ìs ‘”  Ìt ‘”  Ìu ‘”  Ìv ‘”  Ìw ‘”  Ìx ‘”  Ìy ‘”  Ìz ‘”  Ì{ ‘”  Ì| ‘”  Ì} ‘”  Ì~ ‘”  Ì ‘”  Ì€ ‘”  Ì ‘”  Ì‚ ‘”  Ìƒ ‘”  Ì„ ‘”  Ì… ‘”  Ì† ‘”  Ì‡ ‘”  Ìˆ ‘”  Ì‰ ‘”  ÌŠ ‘”  Ì‹ ‘”  ÌŒ ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì‘ ‘”  Ì’ ‘”  Ì“ ‘”  Ì” ‘”  Ì• ‘”  Ì– ‘”  Ì— ‘”  Ì˜ ‘”  Ì™ ‘”  Ìš ‘”  Ì› ‘”  Ìœ ‘”  Ì ‘”  Ì ‘”  ÌŸ ‘”  Ì  ‘”  Ì¡ ‘”  Ì¢ ‘”  Ì£ ‘”  Ì¤ ‘”  Ì¥ ‘”  Ì¦ ‘”  Ì§ ‘”  Ì¨ ‘”  Ì© ‘”  Ìª ‘”  Ì« ‘”  Ì¬ ‘”  Ì­ ‘”  Ì® ‘”  Ì¯ ‘”  Ì° ‘”  Ì± ‘”  Ì² ‘”  Ì³ ‘”  Ì´ ‘”  Ìµ ‘”  Ì¶ ‘”  Ì· ‘”  Ì¸ ‘”  Ì¹ ‘”  Ìº ‘”  Ì» ‘”  Ì¼ ‘”  Ì½ ‘”  Ì¾ ‘”  Ì¿ ‘”  ÌÀ ‘”  ÌÁ ‘”  ÌÂ ‘”  ÌÃ ‘”  ÌÄ ‘”  ÌÅ ‘”  ÌÆ ‘”  ÌÇ ‘”  ÌÈ ‘”  ÌÉ ‘”  ÌÊ ‘”  ÌË ‘”  ÌÌ ‘”  ÌÍ ‘”  ÌÎ ‘”  ÌÏ ‘”  ÌĞ ‘”  ÌÑ ‘”  ÌÒ ‘”  ÌÓ ‘”  ÌÔ ‘”  ÌÕ ‘”  ÌÖ ‘”  Ì× ‘”  ÌØ ‘”  ÌÙ ‘”  ÌÚ ‘”  ÌÛ ‘”  ÌÜ ‘”  Ìİ ‘”  ÌŞ ‘”  Ìß ‘”  Ìà ‘”  Ìá ‘”  Ìâ ‘”  Ìã ‘”  Ìä ‘”  Ìå ‘”  Ìæ ‘”  Ìç ‘”  Ìè ‘”  Ìé ‘”  Ìê ‘”  Ìë ‘”  Ìì ‘”  Ìí ‘”  Ìî ‘”  Ìï ‘”  Ìğ ‘”  Ìñ ‘”  Ìò ‘”  Ìó ‘”  Ìô ‘”  Ìõ ‘”  Ìö ‘”  Ì÷ ‘”  Ìø ‘”  Ìù ‘”  Ìú ‘”  Ìû ‘”  Ìü ‘”  Ìı ‘”  Ìş ‘”  Ìÿ ‘”  Í  ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í	 ‘”  Í
+ ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í  ‘”  Í! ‘”  Í" ‘”  Í# ‘”  Í$ ‘”  Í% ‘”  Í& ‘”  Í' ‘”  Í( ‘”  Í) ‘”  Í* ‘”  Í+ ‘”  Í, ‘”  Í- ‘”  Í. ‘”  Í/ ‘”  Í0 ‘”  Í1 ‘”  Í2 ‘”  Í3 ‘”  Í4 ÔrI’§missing¦pluginÃ¦genAbcÂÔ  ÔrJ”²dynamicImportCache¹exportAllDeclarationCache»exportNamedDeclarationCache«importCacheÔrK–¤type¥start£end«declarationªspecifiers¦source¶ExportNamedDeclarationÍ?Í£ÔrL™¤type¥start£end¢idªexpression©generator¥async¦params¤body³FunctionDeclarationÍFÍ£ÔrM”¤type¥start£end¤nameªIdentifierÍOÍZ«getBleStateÂÂÂÔrN”¤type¥start£end¤body®BlockStatementÍ]Í£“ÔrO•¤type¥start£end¬declarations¤kind³VariableDeclarationÍdÍ“‘ÔrP•¤type¥start£end¢id¤init²VariableDeclaratorÍhÍ’MªIdentifierÍhÍp¨bleStateÔrQ—¤type¥start£end¦object¨property¨computed¨optional°MemberExpressionÍsÍ’Q°MemberExpressionÍsÍˆMªIdentifierÍsÍy¦accessMªIdentifierÍzÍˆ®BluetoothStateÂÂMªIdentifierÍ‰Í’©STATE_OFFÂÂ£letÔrR–¤type¥start£end¥block§handler©finalizer¬TryStatementÍ™ÍŠN®BlockStatementÍÍ’ÔrS”¤type¥start£endªexpression³ExpressionStatementÍ¨ÍÅÔrT–¤type¥start£end¨operator¤left¥right´AssignmentExpressionÍ¨ÍÄ¡=MªIdentifierÍ¨Í°¨bleStateÔrU–¤type¥start£end¦callee©arguments¨optional®CallExpressionÍ³ÍÄQ°MemberExpressionÍ³ÍÂMªIdentifierÍ³Í¹¦accessMªIdentifierÍºÍÂ¨getStateÂÂÂS³ExpressionStatementÍÏÍU®CallExpressionÍÏÍ Q°MemberExpressionÍÏÍÜMªIdentifierÍÏÍÖ§consoleMªIdentifierÍ×ÍÜ¥debugÂÂ‘ÔrV•¤type¥start£end«expressions¦quasis¯TemplateLiteralÍİÍÿ‘MªIdentifierÍõÍı¨bleState’ÔrW•¤type¥start£end¥value¤tail¯TemplateElementÍŞÍóÔrX’£raw¦cookedµget state ble state :µget state ble state :ÂW¯TemplateElementÍşÍşX  ÃÂÔrY•¤type¥start£end¥param¤body«CatchClauseÍÍŠMªIdentifierÍÍ£errN®BlockStatementÍÍŠ‘S³ExpressionStatementÍ5ÍƒU®CallExpressionÍ5Í‚Q°MemberExpressionÍ5ÍBMªIdentifierÍ5Í<§consoleMªIdentifierÍ=ÍB¥errorÂÂ‘V¯TemplateLiteralÍCÍ’Q°MemberExpressionÍ[ÍcMªIdentifierÍ[Í^£errMªIdentifierÍ_Íc¤codeÂÂQ°MemberExpressionÍtÍMªIdentifierÍtÍw£errMªIdentifierÍxÍ§messageÂÂ“W¯TemplateElementÍDÍYXµgetBleState errCode: µgetBleState errCode: ÂW¯TemplateElementÍdÍrX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ€Í€X  ÃÂÀÔrZ”¤type¥start£end¨argument¯ReturnStatementÍÍ MªIdentifierÍ—ÍŸ¨bleStateÀK¶ExportNamedDeclarationÍ¥Í-L³FunctionDeclarationÍ¬Í-MªIdentifierÍ»ÍÉ®getGrantStatusÂÂÃN®BlockStatementÍÌÍ-”O³VariableDeclarationÍğÍ ‘P²VariableDeclaratorÍôÍÿMªIdentifierÍôÍû§tokenIdÔr[•¤type¥start£end¥value£raw§LiteralÍşÍÿ ¡0£letO³VariableDeclarationÍÍH‘P²VariableDeclaratorÍ
+ÍGMªIdentifierÍ
+Í«grantStatusQ°MemberExpressionÍÍGQ°MemberExpressionÍÍ5MªIdentifierÍÍ)±abilityAccessCtrlMªIdentifierÍ*Í5«GrantStatusÂÂMªIdentifierÍ6ÍG±PERMISSION_DENIEDÂÂ£letR¬TryStatementÍNÍN®BlockStatementÍRÍœ’S³ExpressionStatementÍ]ÍğT´AssignmentExpressionÍ]Íï¡=MªIdentifierÍ]Íd§tokenIdQ°MemberExpressionÍtÍïQ°MemberExpressionÍtÍáZ¯AwaitExpressionÍuÍØU®CallExpressionÍ{ÍØQ°MemberExpressionÍ{ÍMªIdentifierÍ{Íˆ­bundleManagerMªIdentifierÍ‰Í´getBundleInfoForSelfÂÂ‘Q°MemberExpressionÍÍ×Q°MemberExpressionÍÍ¶MªIdentifierÍÍ«­bundleManagerMªIdentifierÍ¬Í¶ªBundleFlagÂÂMªIdentifierÍ·Í×Ù GET_BUNDLE_INFO_WITH_APPLICATIONÂÂÂMªIdentifierÍÚÍá§appInfoÂÂMªIdentifierÍâÍï­accessTokenIdÂÂS³ExpressionStatementÍÍ•T´AssignmentExpressionÍÍ”¡=MªIdentifierÍÍ«grantStatusZ¯AwaitExpressionÍ-Í”U®CallExpressionÍ3Í”Q°MemberExpressionÍ3ÍgU®CallExpressionÍ3ÍVQ°MemberExpressionÍ3ÍTMªIdentifierÍ3ÍD±abilityAccessCtrlMªIdentifierÍEÍT¯createAtManagerÂÂÂMªIdentifierÍWÍg°checkAccessTokenÂÂ’MªIdentifierÍhÍo§tokenId[§LiteralÍqÍ“Ù ohos.permission.ACCESS_BLUETOOTHÙ"'ohos.permission.ACCESS_BLUETOOTH'ÂY«CatchClauseÍ¢ÍMªIdentifierÍ©Í¬£errN®BlockStatementÍ®Í‘S³ExpressionStatementÍ¹Í
+U®CallExpressionÍ¹Í	Q°MemberExpressionÍ¹ÍÆMªIdentifierÍ¹ÍÀ§consoleMªIdentifierÍÁÍÆ¥errorÂÂ‘V¯TemplateLiteralÍÇÍ’Q°MemberExpressionÍâÍêMªIdentifierÍâÍå£errMªIdentifierÍæÍê¤codeÂÂQ°MemberExpressionÍûÍMªIdentifierÍûÍş£errMªIdentifierÍÿÍ§messageÂÂ“W¯TemplateElementÍÈÍàX¸getGrantStatus errCode: ¸getGrantStatus errCode: ÂW¯TemplateElementÍëÍùX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍÍX  ÃÂÀZ¯ReturnStatementÍÍ*MªIdentifierÍÍ)«grantStatusÀK¶ExportNamedDeclarationÍ/ÍÄL³FunctionDeclarationÍ6ÍÄMªIdentifierÍEÍR­jumpToSettingÂÂÃ‘MªIdentifierÍSÍZ§contextN®BlockStatementÍ\ÍÄ”O³VariableDeclarationÍcÍç‘P²VariableDeclaratorÍgÍæMªIdentifierÍgÍqªbundleNameQ°MemberExpressionÍtÍæQ°MemberExpressionÍtÍáZ¯AwaitExpressionÍuÍØU®CallExpressionÍ{ÍØQ°MemberExpressionÍ{ÍMªIdentifierÍ{Íˆ­bundleManagerMªIdentifierÍ‰Í´getBundleInfoForSelfÂÂ‘Q°MemberExpressionÍÍ×Q°MemberExpressionÍÍ¶MªIdentifierÍÍ«­bundleManagerMªIdentifierÍ¬Í¶ªBundleFlagÂÂMªIdentifierÍ·Í×Ù GET_BUNDLE_INFO_WITH_APPLICATIONÂÂÂMªIdentifierÍÚÍá§appInfoÂÂMªIdentifierÍâÍæ¤nameÂÂ£letS³ExpressionStatementÍíÍU®CallExpressionÍíÍQ°MemberExpressionÍíÍøMªIdentifierÍíÍô§consoleMªIdentifierÍõÍø£logÂÂ‘V¯TemplateLiteralÍùÍ‘MªIdentifierÍ	ÍªbundleName’W¯TemplateElementÍúÍX­bundle name: ­bundle name: ÂW¯TemplateElementÍÍX  ÃÂO³VariableDeclarationÍÍ$‘P²VariableDeclaratorÍ!Í#MªIdentifierÍ!Í)¨wantInfoÔr\”¤type¥start£endªproperties°ObjectExpressionÍ,Í#”Ôr]™¤type¥start£end¦method©shorthand¨computed£key¥value¤kind¨PropertyÍ7Í]ÂÂÂMªIdentifierÍ7ÍAªbundleName[§LiteralÍCÍ]¸com.huawei.hmos.settingsº'com.huawei.hmos.settings'¤init]¨PropertyÍhÍ›ÂÂÂMªIdentifierÍhÍs«abilityName[§LiteralÍuÍ›Ù$com.huawei.hmos.settings.MainAbilityÙ&'com.huawei.hmos.settings.MainAbility'¤init]¨PropertyÍ¦ÍÃÂÂÂMªIdentifierÍ¦Í©£uri[§LiteralÍ«ÍÃ¶application_info_entry¸'application_info_entry'¤init]¨PropertyÍÎÍÂÂÂMªIdentifierÍÎÍØªparameters\°ObjectExpressionÍÚÍ‘]¨PropertyÍéÍÿÂÂÂMªIdentifierÍéÍóªpushParamsMªIdentifierÍõÍÿªbundleName¤init¤init£letS³ExpressionStatementÍ*ÍÁZ¯AwaitExpressionÍ*ÍÀU®CallExpressionÍ0ÍÀQ°MemberExpressionÍ0ÍTU®CallExpressionÍ0ÍNQ°MemberExpressionÍ0ÍDMªIdentifierÍ0Í7§contextMªIdentifierÍ8ÍD¬startAbilityÂÂ‘MªIdentifierÍEÍM¨wantInfoÂMªIdentifierÍOÍT¥catchÂÂ‘L·ArrowFunctionExpressionÍUÍ¿ÀÂÂÂ‘MªIdentifierÍVÍY£errN®BlockStatementÍ^Í¿‘S³ExpressionStatementÍiÍ¸U®CallExpressionÍiÍ·Q°MemberExpressionÍiÍvMªIdentifierÍiÍp§consoleMªIdentifierÍqÍv¥errorÂÂ‘V¯TemplateLiteralÍwÍ¶’Q°MemberExpressionÍÍ˜MªIdentifierÍÍ“£errMªIdentifierÍ”Í˜¤codeÂÂQ°MemberExpressionÍ©Í´MªIdentifierÍ©Í¬£errMªIdentifierÍ­Í´§messageÂÂ“W¯TemplateElementÍxÍX¶startAbility errCode: ¶startAbility errCode: ÂW¯TemplateElementÍ™Í§X®, errMessage: ®, errMessage: ÂW¯TemplateElementÍµÍµX  ÃÂÂÀK¶ExportNamedDeclarationÍÆÍóL³FunctionDeclarationÍÍÍóMªIdentifierÍÜÍì°askUserAuthorizeÂÂÃ”MªIdentifierÍíÍô§contextÔr^•¤type¥start£end¤left¥right±AssignmentPatternÍöÍMªIdentifierÍöÍ±userAgreeCallback[§LiteralÍ
+ÍÀ¤null^±AssignmentPatternÍÍ'MªIdentifierÍÍ °userDenyCallback[§LiteralÍ#Í'À¤null^±AssignmentPatternÍ)Í>MªIdentifierÍ)Í7®notPopCallback[§LiteralÍ:Í>À¤nullN®BlockStatementÍ@Íó’O³VariableDeclarationÍGÍ	.‘P²VariableDeclaratorÍKÍ	-MªIdentifierÍKÍQ¦resultZ¯AwaitExpressionÍTÍ	-U®CallExpressionÍZÍ	-Q°MemberExpressionÍZÍáU®CallExpressionÍZÍÑQ°MemberExpressionÍZÍ¢U®CallExpressionÍZÍ}Q°MemberExpressionÍZÍ{MªIdentifierÍZÍk±abilityAccessCtrlMªIdentifierÍlÍ{¯createAtManagerÂÂÂMªIdentifierÍˆÍ¢ºrequestPermissionsFromUserÂÂ’MªIdentifierÍ£Íª§contextÔr_”¤type¥start£end¨elements¯ArrayExpressionÍ¬ÍĞ‘[§LiteralÍ­ÍÏÙ ohos.permission.ACCESS_BLUETOOTHÙ"'ohos.permission.ACCESS_BLUETOOTH'ÂMªIdentifierÍÜÍá¥catchÂÂ‘L·ArrowFunctionExpressionÍâÍ	,ÀÃÂÂ‘MªIdentifierÍãÍæ£errU®CallExpressionÍëÍ	,Q°MemberExpressionÍëÍøMªIdentifierÍëÍò§consoleMªIdentifierÍóÍø¥errorÂÂ‘V¯TemplateLiteralÍùÍ	+’Q°MemberExpressionÍ	Í	MªIdentifierÍ	Í	£errMªIdentifierÍ		Í	¤codeÂÂQ°MemberExpressionÍ	Í	)MªIdentifierÍ	Í	!£errMªIdentifierÍ	"Í	)§messageÂÂ“W¯TemplateElementÍúÍ	X©errCode: ©errCode: ÂW¯TemplateElementÍ	Í	X®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ	*Í	*X  ÃÂÂ£letÔr`–¤type¥start£end¤testªconsequent©alternate«IfStatementÍ	4ÍğMªIdentifierÍ	8Í	>¦resultN®BlockStatementÍ	@Í¹“O³VariableDeclarationÍ	KÍ	s‘P²VariableDeclaratorÍ	OÍ	rMªIdentifierÍ	OÍ	Z«grantStatusQ°MemberExpressionÍ	]Í	rQ°MemberExpressionÍ	]Í	oMªIdentifierÍ	]Í	c¦resultMªIdentifierÍ	dÍ	o«authResultsÂÂ[§LiteralÍ	pÍ	q ¡0ÃÂ£letS³ExpressionStatementÍ	}Í	ªU®CallExpressionÍ	}Í	©Q°MemberExpressionÍ	}Í	‰MªIdentifierÍ	}Í	„§consoleMªIdentifierÍ	…Í	‰¤infoÂÂ‘V¯TemplateLiteralÍ	ŠÍ	¨‘MªIdentifierÍ	›Í	¦«grantStatus’W¯TemplateElementÍ	‹Í	™X®grant status: ®grant status: ÂW¯TemplateElementÍ	§Í	§X  ÃÂ`«IfStatementÍ	´Í²Ôra–¤type¥start£end¤left¨operator¥right°BinaryExpressionÍ	¸Í	ÉMªIdentifierÍ	¸Í	Ã«grantStatus£===[§LiteralÍ	ÈÍ	É ¡0N®BlockStatementÍ	ËÍ
+2‘`«IfStatementÍ	ÚÍ
+'MªIdentifierÍ	ŞÍ	ï±userAgreeCallbackN®BlockStatementÍ	ñÍ
+'‘S³ExpressionStatementÍ
+Í
+U®CallExpressionÍ
+Í
+MªIdentifierÍ
+Í
+±userAgreeCallbackÂÀN®BlockStatementÍ
+AÍ²‘`«IfStatementÍ
+PÍ§a±LogicalExpressionÍ
+TÍ
+Q°MemberExpressionÍ
+TÍ
+mMªIdentifierÍ
+TÍ
+Z¦resultMªIdentifierÍ
+[Í
+m²dialogShownResultsÂÂ¢&&Q°MemberExpressionÍ
+qÍ
+Q°MemberExpressionÍ
+qÍ
+ŠMªIdentifierÍ
+qÍ
+w¦resultMªIdentifierÍ
+xÍ
+Š²dialogShownResultsÂÂ[§LiteralÍ
+‹Í
+Œ ¡0ÃÂN®BlockStatementÍ
+Í#‘`«IfStatementÍ
+ÁÍMªIdentifierÍ
+ÅÍ
+Õ°userDenyCallbackN®BlockStatementÍ
+×Í‘S³ExpressionStatementÍ
+îÍU®CallExpressionÍ
+îÍ MªIdentifierÍ
+îÍ
+ş°userDenyCallbackÂÀN®BlockStatementÍ6Í§‘`«IfStatementÍIÍ˜MªIdentifierÍMÍ[®notPopCallbackN®BlockStatementÍ]Í˜‘S³ExpressionStatementÍtÍ…U®CallExpressionÍtÍ„MªIdentifierÍtÍ‚®notPopCallbackÂÀN®BlockStatementÍÄÍğ‘S³ExpressionStatementÍÏÍéU®CallExpressionÍÏÍèQ°MemberExpressionÍÏÍÛMªIdentifierÍÏÍÖ§consoleMªIdentifierÍ×ÍÛ¤infoÂÂ‘[§LiteralÍÜÍç©no result«"no result"ÂÀK¶ExportNamedDeclarationÍõÍ&L³FunctionDeclarationÍüÍ&MªIdentifierÍÍ©enableBleÂÂÃ‘^±AssignmentPatternÍÍ)MªIdentifierÍÍ"­bleOnCallback[§LiteralÍ%Í)À¤nullN®BlockStatementÍ+Í&’S³ExpressionStatementÍ2ÍSU®CallExpressionÍ2ÍRQ°MemberExpressionÍ2Í;MªIdentifierÍ2Í8¦accessMªIdentifierÍ9Í;¢onÂÂ’[§LiteralÍ<ÍI«stateChange­'stateChange'L·ArrowFunctionExpressionÍKÍQÀÂÂÂ‘MªIdentifierÍKÍP¥stateN®BlockStatementÍTÍQ’`«IfStatementÍ_Ía°BinaryExpressionÍcÍŠMªIdentifierÍcÍh¥state¢==Q°MemberExpressionÍlÍŠQ°MemberExpressionÍlÍMªIdentifierÍlÍr¦accessMªIdentifierÍsÍ®BluetoothStateÂÂMªIdentifierÍ‚ÍŠ¨STATE_ONÂÂN®BlockStatementÍŒÍ’S³ExpressionStatementÍ›ÍµU®CallExpressionÍ›Í´Q°MemberExpressionÍ›Í¥MªIdentifierÍ›Í¡¦accessMªIdentifierÍ¢Í¥£offÂÂ‘[§LiteralÍ¦Í³«stateChange­'stateChange'Â`«IfStatementÍÃÍMªIdentifierÍÇÍÔ­bleOnCallbackN®BlockStatementÍÖÍ‘S³ExpressionStatementÍéÍùU®CallExpressionÍéÍøMªIdentifierÍéÍö­bleOnCallbackÂÀÀS³ExpressionStatementÍÍJU®CallExpressionÍÍIQ°MemberExpressionÍÍ*MªIdentifierÍÍ$§consoleMªIdentifierÍ%Í*¥debugÂÂ‘V¯TemplateLiteralÍ+ÍH‘MªIdentifierÍAÍF¥state’W¯TemplateElementÍ,Í?X³bluetooth statues: ³bluetooth statues: ÂW¯TemplateElementÍGÍGX  ÃÂÂR¬TryStatementÍYÍ#N®BlockStatementÍ]Í­’S³ExpressionStatementÍhÍƒU®CallExpressionÍhÍ‚Q°MemberExpressionÍhÍuMªIdentifierÍhÍo§consoleMªIdentifierÍpÍu¥debugÂÂ‘[§LiteralÍvÍ©enableBle«"enableBle"ÂS³ExpressionStatementÍÍ¦U®CallExpressionÍÍ¥Q°MemberExpressionÍÍ£MªIdentifierÍÍ“¦accessMªIdentifierÍ”Í£¯enableBluetoothÂÂÂY«CatchClauseÍ³Í#MªIdentifierÍºÍ½£errN®BlockStatementÍ¿Í#‘S³ExpressionStatementÍÊÍU®CallExpressionÍÊÍQ°MemberExpressionÍÊÍ×MªIdentifierÍÊÍÑ§consoleMªIdentifierÍÒÍ×¥errorÂÂ‘V¯TemplateLiteralÍØÍ’Q°MemberExpressionÍôÍüMªIdentifierÍôÍ÷£errMªIdentifierÍøÍü¤codeÂÂQ°MemberExpressionÍÍMªIdentifierÍÍ£errMªIdentifierÍÍ§messageÂÂ“W¯TemplateElementÍÙÍòX¹enableBluetooth errCode: ¹enableBluetooth errCode: ÂW¯TemplateElementÍıÍX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍÍX  ÃÂÀÀK¶ExportNamedDeclarationÍ(Í½L³FunctionDeclarationÍ/Í½MªIdentifierÍ>ÍJ¬startBleScanÂÂÃ‘MªIdentifierÍKÍ]²scanResultCallbackN®BlockStatementÍ_Í½’S³ExpressionStatementÍfÍWU®CallExpressionÍfÍVQ°MemberExpressionÍfÍlMªIdentifierÍfÍi£bleMªIdentifierÍjÍl¢onÂÂ’[§LiteralÍmÍ|­BLEDeviceFind¯'BLEDeviceFind'L·ArrowFunctionExpressionÍ~ÍUÀÂÂÂ‘MªIdentifierÍ~ÍˆªscanResultN®BlockStatementÍŒÍU‘S³ExpressionStatementÍ—ÍNU®CallExpressionÍ—ÍMMªIdentifierÍ—Í©²scanResultCallback‘U®CallExpressionÍªÍLQ°MemberExpressionÍªÍİU®CallExpressionÍªÍÙQ°MemberExpressionÍªÍ»MªIdentifierÍªÍ´ªscanResultMªIdentifierÍµÍ»¦filterÂÂ‘L·ArrowFunctionExpressionÍ¼ÍØÀÃÂÂ‘MªIdentifierÍ¼ÍÂ¦resultQ°MemberExpressionÍÆÍØMªIdentifierÍÆÍÌ¦resultMªIdentifierÍÍÍØ«connectableÂÂÂMªIdentifierÍÚÍİ£mapÂÂ‘L·ArrowFunctionExpressionÍŞÍKÀÃÂÂ‘MªIdentifierÍŞÍä¦result\°ObjectExpressionÍéÍJ“]¨PropertyÍøÍÂÂÂMªIdentifierÍøÍü¤nameQ°MemberExpressionÍşÍMªIdentifierÍşÍ¦resultMªIdentifierÍÍªdeviceNameÂÂ¤init]¨PropertyÍÍ"ÂÂÂMªIdentifierÍÍ¤rssiQ°MemberExpressionÍÍ"MªIdentifierÍÍ¦resultMªIdentifierÍÍ"¤rssiÂÂ¤init]¨PropertyÍ$Í?ÂÂÂMªIdentifierÍ$Í.ªmacAddressQ°MemberExpressionÍ0Í?MªIdentifierÍ0Í6¦resultMªIdentifierÍ7Í?¨deviceIdÂÂ¤initÂÂÂR¬TryStatementÍ]ÍºN®BlockStatementÍaÍT’S³ExpressionStatementÍlÍŒU®CallExpressionÍlÍ‹Q°MemberExpressionÍlÍwMªIdentifierÍlÍs§consoleMªIdentifierÍtÍw£logÂÂ‘[§LiteralÍxÍŠ°ble.startBLEScan²"ble.startBLEScan"ÂS³ExpressionStatementÍ–ÍMU®CallExpressionÍ–ÍLQ°MemberExpressionÍ–Í¦MªIdentifierÍ–Í™£bleMªIdentifierÍšÍ¦¬startBLEScanÂÂ’_¯ArrayExpressionÍ§Í«‘\°ObjectExpressionÍ¨Íª\°ObjectExpressionÍ­ÍK“]¨PropertyÍ¼ÍÊÂÂÂMªIdentifierÍ¼ÍÄ¨interval[§LiteralÍÆÍÊÍè¤1000¤init]¨PropertyÍÙÍÂÂÂMªIdentifierÍÙÍá¨dutyModeQ°MemberExpressionÍãÍQ°MemberExpressionÍãÍïMªIdentifierÍãÍæ£bleMªIdentifierÍçÍï¨ScanDutyÂÂMªIdentifierÍğÍ³SCAN_MODE_LOW_POWERÂÂ¤init]¨PropertyÍÍ@ÂÂÂMªIdentifierÍÍ©matchModeQ°MemberExpressionÍÍ@Q°MemberExpressionÍÍ*MªIdentifierÍÍ £bleMªIdentifierÍ!Í*©MatchModeÂÂMªIdentifierÍ+Í@µMATCH_MODE_AGGRESSIVEÂÂ¤initÂY«CatchClauseÍZÍºMªIdentifierÍaÍd£errN®BlockStatementÍfÍº‘S³ExpressionStatementÍqÍ³U®CallExpressionÍqÍ²Q°MemberExpressionÍqÍ~MªIdentifierÍqÍx§consoleMªIdentifierÍyÍ~¥errorÂÂ‘V¯TemplateLiteralÍÍ±’Q°MemberExpressionÍ‹Í“MªIdentifierÍ‹Í£errMªIdentifierÍÍ“¤codeÂÂQ°MemberExpressionÍ¤Í¯MªIdentifierÍ¤Í§£errMªIdentifierÍ¨Í¯§messageÂÂ“W¯TemplateElementÍ€Í‰X©errCode: ©errCode: ÂW¯TemplateElementÍ”Í¢X®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ°Í°X  ÃÂÀÀK¶ExportNamedDeclarationÍ¿ÍL³FunctionDeclarationÍÆÍMªIdentifierÍÏÍÚ«stopBleScanÂÂÂN®BlockStatementÍİÍ‘R¬TryStatementÍäÍ›N®BlockStatementÍèÍ5’S³ExpressionStatementÍóÍU®CallExpressionÍóÍQ°MemberExpressionÍóÍşMªIdentifierÍóÍú§consoleMªIdentifierÍûÍş£logÂÂ‘[§LiteralÍÿÍ¯ble.stopBLEScan±"ble.stopBLEScan"ÂS³ExpressionStatementÍÍ.U®CallExpressionÍÍ-Q°MemberExpressionÍÍ+MªIdentifierÍÍ£bleMªIdentifierÍ Í+«stopBLEScanÂÂÂY«CatchClauseÍ;Í›MªIdentifierÍBÍE£errN®BlockStatementÍGÍ›‘S³ExpressionStatementÍRÍ”U®CallExpressionÍRÍ“Q°MemberExpressionÍRÍ_MªIdentifierÍRÍY§consoleMªIdentifierÍZÍ_¥errorÂÂ‘V¯TemplateLiteralÍ`Í’’Q°MemberExpressionÍlÍtMªIdentifierÍlÍo£errMªIdentifierÍpÍt¤codeÂÂQ°MemberExpressionÍ…ÍMªIdentifierÍ…Íˆ£errMªIdentifierÍ‰Í§messageÂÂ“W¯TemplateElementÍaÍjX©errCode: ©errCode: ÂW¯TemplateElementÍuÍƒX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ‘Í‘X  ÃÂÀÀK¶ExportNamedDeclarationÍÙÍËL³FunctionDeclarationÍàÍËMªIdentifierÍïÍş¯connectToDeviceÂÂÃ•MªIdentifierÍÿÍ	ªmacAddress^±AssignmentPatternÍÍ#MªIdentifierÍÍ±connectedCallback[§LiteralÍÍ#À¤null^±AssignmentPatternÍ%Í@MªIdentifierÍ%Í9´disconnectedCallback[§LiteralÍ<Í@À¤null^±AssignmentPatternÍBÍYMªIdentifierÍBÍR°servicesCallback[§LiteralÍUÍYÀ¤null^±AssignmentPatternÍ[Í~MªIdentifierÍ[Íw¼characteristicNotifyCallback[§LiteralÍzÍ~À¤nullN®BlockStatementÍ€ÍË”S³ExpressionStatementÍ‡ÍÀT´AssignmentExpressionÍ‡Í¿¡=MªIdentifierÍ‡Í–¯connectedDeviceU®CallExpressionÍ™Í¿Q°MemberExpressionÍ™Í³MªIdentifierÍ™Íœ£bleMªIdentifierÍÍ³¶createGattClientDeviceÂÂ‘MªIdentifierÍ´Í¾ªmacAddressÂS³ExpressionStatementÍÆÍS¯ChainExpressionÍÆÍU®CallExpressionÍÆÍQ°MemberExpressionÍÆÍÙMªIdentifierÍÆÍÕ¯connectedDeviceMªIdentifierÍ×ÍÙ¢onÂÃ’[§LiteralÍÚÍô¸BLEConnectionStateChangeº'BLEConnectionStateChange'L·ArrowFunctionExpressionÍöÍÀÂÂÃ‘MªIdentifierÍıÍ¥stateN®BlockStatementÍÍ’O³VariableDeclarationÍÍ1‘P²VariableDeclaratorÍÍ0MªIdentifierÍÍ"¬connectStateQ°MemberExpressionÍ%Í0MªIdentifierÍ%Í*¥stateMªIdentifierÍ+Í0¥stateÂÂ£let`«IfStatementÍ;Ía°BinaryExpressionÍ?ÍMªIdentifierÍ?ÍK¬connectState£===Q°MemberExpressionÍPÍQ°MemberExpressionÍPÍoMªIdentifierÍPÍX¨constantMªIdentifierÍYÍo¶ProfileConnectionStateÂÂMªIdentifierÍpÍ¯STATE_CONNECTEDÂÂN®BlockStatementÍÍÕ”`«IfStatementÍÍİMªIdentifierÍ”Í¥±connectedCallbackN®BlockStatementÍ§Íİ‘S³ExpressionStatementÍºÍÎU®CallExpressionÍºÍÍMªIdentifierÍºÍË±connectedCallbackÂÀS³ExpressionStatementÍëÍ%S¯ChainExpressionÍëÍ$U®CallExpressionÍëÍ$Q°MemberExpressionÍëÍşMªIdentifierÍëÍú¯connectedDeviceMªIdentifierÍüÍş¢onÂÃ’[§LiteralÍÿÍ·BLECharacteristicChange¹'BLECharacteristicChange'L·ArrowFunctionExpressionÍÍ#ÀÂÂÂ‘MªIdentifierÍÍ)®characteristicN®BlockStatementÍ.Í#‘`«IfStatementÍAÍMªIdentifierÍEÍa¼characteristicNotifyCallbackN®BlockStatementÍcÍ‘S³ExpressionStatementÍzÍU®CallExpressionÍzÍ MªIdentifierÍzÍ–¼characteristicNotifyCallback’U®CallExpressionÍ—ÍÆMªIdentifierÍ—Í£¬getShortUUID‘Q°MemberExpressionÍ¤ÍÅMªIdentifierÍ¤Í²®characteristicMªIdentifierÍ³ÍÅ²characteristicUuidÂÂÂU®CallExpressionÍÈÍÿMªIdentifierÍÈÍÛ³arrayBufferToString‘Q°MemberExpressionÍÜÍşMªIdentifierÍÜÍê®characteristicMªIdentifierÍëÍş³characteristicValueÂÂÂÂÀÂS³ExpressionStatementÍ3ÍfT´AssignmentExpressionÍ3Íe¡=MªIdentifierÍ3Í>«serviceListZ¯AwaitExpressionÍAÍeS¯ChainExpressionÍGÍeU®CallExpressionÍGÍeQ°MemberExpressionÍGÍcMªIdentifierÍGÍV¯connectedDeviceMªIdentifierÍXÍc«getServicesÂÃÂ`«IfStatementÍtÍÊMªIdentifierÍxÍˆ°servicesCallbackN®BlockStatementÍŠÍÊ‘S³ExpressionStatementÍÍ»U®CallExpressionÍÍºMªIdentifierÍÍ­°servicesCallback‘MªIdentifierÍ®Í¹«serviceListÂÀ`«IfStatementÍäÍa°BinaryExpressionÍèÍ+MªIdentifierÍèÍô¬connectState£===Q°MemberExpressionÍùÍ+Q°MemberExpressionÍùÍMªIdentifierÍùÍ¨constantMªIdentifierÍÍ¶ProfileConnectionStateÂÂMªIdentifierÍÍ+²STATE_DISCONNECTEDÂÂN®BlockStatementÍ-Í“`«IfStatementÍ<ÍMªIdentifierÍ@ÍT´disconnectedCallbackN®BlockStatementÍVÍ‘S³ExpressionStatementÍiÍ€U®CallExpressionÍiÍMªIdentifierÍiÍ}´disconnectedCallbackÂÀS³ExpressionStatementÍ¼ÍÕS¯ChainExpressionÍ¼ÍÔU®CallExpressionÍ¼ÍÔQ°MemberExpressionÍ¼ÍÒMªIdentifierÍ¼ÍË¯connectedDeviceMªIdentifierÍÍÍÒ¥closeÂÃÂS³ExpressionStatementÍãÍúT´AssignmentExpressionÍãÍù¡=MªIdentifierÍãÍò¯connectedDevice[§LiteralÍõÍùÀ¤nullÀÂR¬TryStatementÍÍ«N®BlockStatementÍÍE‘S³ExpressionStatementÍ#Í>S¯ChainExpressionÍ#Í=U®CallExpressionÍ#Í=Q°MemberExpressionÍ#Í;MªIdentifierÍ#Í2¯connectedDeviceMªIdentifierÍ4Í;§connectÂÃÂY«CatchClauseÍKÍ«MªIdentifierÍRÍU£errN®BlockStatementÍWÍ«‘S³ExpressionStatementÍbÍ¤U®CallExpressionÍbÍ£Q°MemberExpressionÍbÍoMªIdentifierÍbÍi§consoleMªIdentifierÍjÍo¥errorÂÂ‘V¯TemplateLiteralÍpÍ¢’Q°MemberExpressionÍ|Í„MªIdentifierÍ|Í£errMªIdentifierÍ€Í„¤codeÂÂQ°MemberExpressionÍ•Í MªIdentifierÍ•Í˜£errMªIdentifierÍ™Í §messageÂÂ“W¯TemplateElementÍqÍzX©errCode: ©errCode: ÂW¯TemplateElementÍ…Í“X®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ¡Í¡X  ÃÂÀZ¯ReturnStatementÍ±ÍÈMªIdentifierÍ¸ÍÇ¯connectedDeviceÀK¶ExportNamedDeclarationÍÍÍšL³FunctionDeclarationÍÔÍšMªIdentifierÍãÍó°disconnectDeviceÂÂÃN®BlockStatementÍöÍš‘R¬TryStatementÍıÍ—N®BlockStatementÍÍ1‘S³ExpressionStatementÍÍ*S¯ChainExpressionÍÍ)U®CallExpressionÍÍ)Q°MemberExpressionÍÍ'MªIdentifierÍÍ¯connectedDeviceMªIdentifierÍÍ'ªdisconnectÂÃÂY«CatchClauseÍ7Í—MªIdentifierÍ>ÍA£errN®BlockStatementÍCÍ—‘S³ExpressionStatementÍNÍU®CallExpressionÍNÍQ°MemberExpressionÍNÍ[MªIdentifierÍNÍU§consoleMªIdentifierÍVÍ[¥errorÂÂ‘V¯TemplateLiteralÍ\Í’Q°MemberExpressionÍhÍpMªIdentifierÍhÍk£errMªIdentifierÍlÍp¤codeÂÂQ°MemberExpressionÍÍŒMªIdentifierÍÍ„£errMªIdentifierÍ…ÍŒ§messageÂÂ“W¯TemplateElementÍ]ÍfX©errCode: ©errCode: ÂW¯TemplateElementÍqÍX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍÍX  ÃÂÀÀK¶ExportNamedDeclarationÍ¹Í]O³VariableDeclarationÍÀÍ]‘P²VariableDeclaratorÍÆÍ\MªIdentifierÍÆÍÒ¬getShortUUIDL·ArrowFunctionExpressionÍÕÍ\ÀÂÂÂ‘MªIdentifierÍÖÍÙ£srcN®BlockStatementÍŞÍ\“O³VariableDeclarationÍåÍ‘P²VariableDeclaratorÍëÍMªIdentifierÍëÍğ¥regexÔrb–¤type¥start£end¥value£raw¥regex§LiteralÍóÍ’¬0000(\w{4})-¡g¯/0000(\w{4})-/gÔrc’§pattern¥flags¬0000(\w{4})-¡g¥constO³VariableDeclarationÍ	Í)‘P²VariableDeclaratorÍÍ(MªIdentifierÍÍ§matchesU®CallExpressionÍÍ(Q°MemberExpressionÍÍ#MªIdentifierÍÍ¥regexMªIdentifierÍÍ#¤execÂÂ‘MªIdentifierÍ$Í'£srcÂ¥constZ¯ReturnStatementÍ/ÍY`µConditionalExpressionÍ6ÍXa°BinaryExpressionÍ6ÍEMªIdentifierÍ6Í=§matches¢!=[§LiteralÍAÍEÀ¤nullQ°MemberExpressionÍHÍRMªIdentifierÍHÍO§matches[§LiteralÍPÍQ¡1ÃÂMªIdentifierÍUÍX£src¥constÀK¶ExportNamedDeclarationÍæÍ’O³VariableDeclarationÍíÍ’‘P²VariableDeclaratorÍóÍ‘MªIdentifierÍóÍ²readCharacteristicL·ArrowFunctionExpressionÍÍ‘ÀÂÂÃ‘MªIdentifierÍÍ!²characteristicUUIDN®BlockStatementÍ&Í‘‘R¬TryStatementÍ-ÍN®BlockStatementÍ1Í(’O³VariableDeclarationÍ<Í¦‘P²VariableDeclaratorÍ@Í¥MªIdentifierÍ@ÍF¦resultZ¯AwaitExpressionÍIÍ¥S¯ChainExpressionÍOÍ¥U®CallExpressionÍOÍ¥Q°MemberExpressionÍOÍwMªIdentifierÍOÍ^¯connectedDeviceMªIdentifierÍ`Íw·readCharacteristicValueÂÃ‘U®CallExpressionÍxÍ¤MªIdentifierÍxÍ¸findTargetCharacteristic‘MªIdentifierÍ‘Í£²characteristicUUIDÂÂ£letZ¯ReturnStatementÍôÍ!U®CallExpressionÍûÍ MªIdentifierÍûÍ¨arrToStr‘S¯ChainExpressionÍÍQ°MemberExpressionÍÍMªIdentifierÍÍ
+¦resultMªIdentifierÍÍ³characteristicValueÂÃÂY«CatchClauseÍ.ÍMªIdentifierÍ5Í8£errN®BlockStatementÍ:Í‘S³ExpressionStatementÍEÍ‡U®CallExpressionÍEÍ†Q°MemberExpressionÍEÍRMªIdentifierÍEÍL§consoleMªIdentifierÍMÍR¥errorÂÂ‘V¯TemplateLiteralÍSÍ…’Q°MemberExpressionÍ_ÍgMªIdentifierÍ_Íb£errMªIdentifierÍcÍg¤codeÂÂQ°MemberExpressionÍxÍƒMªIdentifierÍxÍ{£errMªIdentifierÍ|Íƒ§messageÂÂ“W¯TemplateElementÍTÍ]X©errCode: ©errCode: ÂW¯TemplateElementÍhÍvX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ„Í„X  ÃÂÀ¥constÀK¶ExportNamedDeclarationÍŸÍ NO³VariableDeclarationÍ¦Í N‘P²VariableDeclaratorÍ¬Í MMªIdentifierÍ¬ÍÄ¸writeMusicCharacteristicL·ArrowFunctionExpressionÍÇÍ MÀÂÂÃ‘MªIdentifierÍÎÍØªwriteValueN®BlockStatementÍİÍ M“O³VariableDeclarationÍäÍ ‘P²VariableDeclaratorÍèÍMªIdentifierÍèÍü´targetCharacteristicU®CallExpressionÍÿÍMªIdentifierÍÿÍ¸findTargetCharacteristic‘[§LiteralÍÍ¤FFF3¦"FFF3"Â£letS³ExpressionStatementÍ&ÍiT´AssignmentExpressionÍ&Íh¡=Q°MemberExpressionÍ&ÍNMªIdentifierÍ&Í:´targetCharacteristicMªIdentifierÍ;ÍN³characteristicValueÂÂU®CallExpressionÍQÍhMªIdentifierÍQÍ\«strToBuffer‘MªIdentifierÍ]ÍgªwriteValueÂR¬TryStatementÍoÍ JN®BlockStatementÍsÍä‘S³ExpressionStatementÍ~ÍİZ¯AwaitExpressionÍ~ÍÜS¯ChainExpressionÍ„ÍÜU®CallExpressionÍ„ÍÜQ°MemberExpressionÍ„Í­MªIdentifierÍ„Í“¯connectedDeviceMªIdentifierÍ•Í­¸writeCharacteristicValueÂÃ’MªIdentifierÍ®ÍÂ´targetCharacteristicQ°MemberExpressionÍÄÍÛQ°MemberExpressionÍÄÍÕMªIdentifierÍÄÍÇ£bleMªIdentifierÍÈÍÕ­GattWriteTypeÂÂMªIdentifierÍÖÍÛ¥WRITEÂÂÂY«CatchClauseÍêÍ JMªIdentifierÍñÍô£errN®BlockStatementÍöÍ J‘S³ExpressionStatementÍ Í CU®CallExpressionÍ Í BQ°MemberExpressionÍ Í MªIdentifierÍ Í §consoleMªIdentifierÍ 	Í ¥errorÂÂ‘V¯TemplateLiteralÍ Í A’Q°MemberExpressionÍ Í #MªIdentifierÍ Í £errMªIdentifierÍ Í #¤codeÂÂQ°MemberExpressionÍ 4Í ?MªIdentifierÍ 4Í 7£errMªIdentifierÍ 8Í ?§messageÂÂ“W¯TemplateElementÍ Í X©errCode: ©errCode: ÂW¯TemplateElementÍ $Í 2X®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ @Í @X  ÃÂÀ¥constÀK¶ExportNamedDeclarationÍ [Í"O³VariableDeclarationÍ bÍ"‘P²VariableDeclaratorÍ hÍ"MªIdentifierÍ hÍ €¸writeLightCharacteristicL·ArrowFunctionExpressionÍ ƒÍ"ÀÂÂÃ‘MªIdentifierÍ ŠÍ £arrN®BlockStatementÍ ’Í"“O³VariableDeclarationÍ ™Í Õ‘P²VariableDeclaratorÍ Í ÔMªIdentifierÍ Í ±´targetCharacteristicU®CallExpressionÍ ´Í ÔMªIdentifierÍ ´Í Ì¸findTargetCharacteristic‘[§LiteralÍ ÍÍ Ó¤FFF1¦"FFF1"Â£letS³ExpressionStatementÍ ÛÍ! T´AssignmentExpressionÍ ÛÍ!¡=Q°MemberExpressionÍ ÛÍ!MªIdentifierÍ ÛÍ ï´targetCharacteristicMªIdentifierÍ ğÍ!³characteristicValueÂÂU®CallExpressionÍ!Í!MªIdentifierÍ!Í!´convertToArrayBuffer‘MªIdentifierÍ!Í!£arrÂR¬TryStatementÍ!&Í"N®BlockStatementÍ!*Í!›‘S³ExpressionStatementÍ!5Í!”Z¯AwaitExpressionÍ!5Í!“S¯ChainExpressionÍ!;Í!“U®CallExpressionÍ!;Í!“Q°MemberExpressionÍ!;Í!dMªIdentifierÍ!;Í!J¯connectedDeviceMªIdentifierÍ!LÍ!d¸writeCharacteristicValueÂÃ’MªIdentifierÍ!eÍ!y´targetCharacteristicQ°MemberExpressionÍ!{Í!’Q°MemberExpressionÍ!{Í!ŒMªIdentifierÍ!{Í!~£bleMªIdentifierÍ!Í!Œ­GattWriteTypeÂÂMªIdentifierÍ!Í!’¥WRITEÂÂÂY«CatchClauseÍ!¡Í"MªIdentifierÍ!¨Í!«£errN®BlockStatementÍ!­Í"‘S³ExpressionStatementÍ!¸Í!úU®CallExpressionÍ!¸Í!ùQ°MemberExpressionÍ!¸Í!ÅMªIdentifierÍ!¸Í!¿§consoleMªIdentifierÍ!ÀÍ!Å¥errorÂÂ‘V¯TemplateLiteralÍ!ÆÍ!ø’Q°MemberExpressionÍ!ÒÍ!ÚMªIdentifierÍ!ÒÍ!Õ£errMªIdentifierÍ!ÖÍ!Ú¤codeÂÂQ°MemberExpressionÍ!ëÍ!öMªIdentifierÍ!ëÍ!î£errMªIdentifierÍ!ïÍ!ö§messageÂÂ“W¯TemplateElementÍ!ÇÍ!ĞX©errCode: ©errCode: ÂW¯TemplateElementÍ!ÛÍ!éX®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ!÷Í!÷X  ÃÂÀ¥constÀK¶ExportNamedDeclarationÍ"Í#6O³VariableDeclarationÍ"Í#6‘P²VariableDeclaratorÍ"Í#5MªIdentifierÍ"Í"+·subscribeCharacteristicL·ArrowFunctionExpressionÍ".Í#5ÀÂÂÂ‘MªIdentifierÍ"/Í"A²characteristicUUIDN®BlockStatementÍ"FÍ#5‘R¬TryStatementÍ"MÍ#2N®BlockStatementÍ"QÍ"Ì‘S³ExpressionStatementÍ"\Í"ÅS¯ChainExpressionÍ"\Í"ÄU®CallExpressionÍ"\Í"ÄQ°MemberExpressionÍ"\Í"MªIdentifierÍ"\Í"k¯connectedDeviceMªIdentifierÍ"mÍ"Ù#setCharacteristicChangeNotificationÂÃ’U®CallExpressionÍ"‘Í"½MªIdentifierÍ"‘Í"©¸findTargetCharacteristic‘MªIdentifierÍ"ªÍ"¼²characteristicUUIDÂ[§LiteralÍ"¿Í"ÃÃ¤trueÂY«CatchClauseÍ"ÒÍ#2MªIdentifierÍ"ÙÍ"Ü£errN®BlockStatementÍ"ŞÍ#2‘S³ExpressionStatementÍ"éÍ#+U®CallExpressionÍ"éÍ#*Q°MemberExpressionÍ"éÍ"öMªIdentifierÍ"éÍ"ğ§consoleMªIdentifierÍ"ñÍ"ö¥errorÂÂ‘V¯TemplateLiteralÍ"÷Í#)’Q°MemberExpressionÍ#Í#MªIdentifierÍ#Í#£errMªIdentifierÍ#Í#¤codeÂÂQ°MemberExpressionÍ#Í#'MªIdentifierÍ#Í#£errMªIdentifierÍ# Í#'§messageÂÂ“W¯TemplateElementÍ"øÍ#X©errCode: ©errCode: ÂW¯TemplateElementÍ#Í#X®, errMessage: ®, errMessage: ÂW¯TemplateElementÍ#(Í#(X  ÃÂÀ¥constÀ—Ôrd•¤type¥start£endªspecifiers¦source±ImportDeclaration ,‘Ôre”¤type¥start£end¥local¶ImportDefaultSpecifierMªIdentifier¦access[§Literal+¶@ohos.bluetooth.access¸"@ohos.bluetooth.access"d±ImportDeclaration.ÌT‘e¶ImportDefaultSpecifier58MªIdentifier58£ble[§Literal>ÌS³@ohos.bluetooth.bleµ"@ohos.bluetooth.ble"d±ImportDeclarationÌVÌ†‘e¶ImportDefaultSpecifierÌ]ÌeMªIdentifierÌ]Ìe¨constant[§LiteralÌkÌ…¸@ohos.bluetooth.constantº"@ohos.bluetooth.constant"d±ImportDeclarationÌˆÌÀ‘e¶ImportDefaultSpecifierÌÌ MªIdentifierÌÌ ±abilityAccessCtrl[§LiteralÌ¦Ì¿·@ohos.abilityAccessCtrl¹"@ohos.abilityAccessCtrl"d±ImportDeclarationÌÂÌù‘e¶ImportDefaultSpecifierÌÉÌÖMªIdentifierÌÉÌÖ­bundleManager[§LiteralÌÜÌøº@ohos.bundle.bundleManager¼"@ohos.bundle.bundleManager"d±ImportDeclarationÌûÍ‘e¶ImportDefaultSpecifierÍÍMªIdentifierÍÍ¦buffer[§LiteralÍÍ¬@ohos.buffer®"@ohos.buffer"d±ImportDeclarationÍÍ=‘e¶ImportDefaultSpecifierÍ&Í*MªIdentifierÍ&Í*¤util[§LiteralÍ0Í<ª@ohos.util¬"@ohos.util"

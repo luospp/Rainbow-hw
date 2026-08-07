@@ -34,7 +34,7 @@ class Index extends ViewPU {
                         //用户点击去授权，拉起系统授权
                         this.onBleAuthorizeDialogConfirm();
                     }
-                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 26, col: 18 });
+                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 26, col: 14 });
                 jsDialog.setController(this.bleAuthorizeDialogController);
                 ViewPU.create(jsDialog);
                 let paramsLambda = () => {
@@ -55,7 +55,7 @@ class Index extends ViewPU {
                     confirm: () => {
                         this.onBleSwitchDialogConfirm();
                     }
-                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 35, col: 18 });
+                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 35, col: 14 });
                 jsDialog.setController(this.bleSwitchDialogController);
                 ViewPU.create(jsDialog);
                 let paramsLambda = () => {
@@ -75,7 +75,7 @@ class Index extends ViewPU {
                     confirm: () => {
                         this.onJumpToSettingDialogConfirm();
                     }
-                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 43, col: 18 });
+                }, undefined, -1, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 43, col: 14 });
                 jsDialog.setController(this.jumpToSettingDialogController);
                 ViewPU.create(jsDialog);
                 let paramsLambda = () => {
@@ -183,18 +183,20 @@ class Index extends ViewPU {
             // index维护了一份蓝牙设备列表
             // helper传过来的蓝牙设备列表需要对比，如果已在列表中只需要更新rssi，否则需要添加进列表中
             bleDeviceList.forEach(bleDevice => {
-                let foundDevice = this.bleItemList.find(item => item.name == bleDevice.name);
-                if (foundDevice) {
-                    foundDevice.rssi = bleDevice.rssi;
+                // if (bleDevice.name.length > 0 && bleDevice.name.startsWith("BT401")) {
+                if (bleDevice.name.length > 0) {
+                    let foundDevice = this.bleItemList.find(item => item.name == bleDevice.name);
+                    if (foundDevice) {
+                        foundDevice.rssi = bleDevice.rssi;
+                    }
+                    else {
+                        this.bleItemList.push({
+                            name: bleDevice.name,
+                            rssi: bleDevice.rssi,
+                            macAddress: bleDevice.macAddress
+                        });
+                    }
                 }
-                else {
-                    this.bleItemList.push({
-                        name: bleDevice.name,
-                        rssi: bleDevice.rssi,
-                        macAddress: bleDevice.macAddress
-                    });
-                }
-                // }
             });
         });
         // 20秒后关闭搜索
@@ -225,17 +227,16 @@ class Index extends ViewPU {
     initialRender() {
         this.observeComponentCreation2((elmtId, isInitialRender) => {
             Column.create();
-            Column.padding({ top: 30, bottom: 50 });
+            Column.padding({ top: 10, bottom: 20 });
             Column.height('100%');
             Column.width('100%');
         }, Column);
         this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Flex.create({
-                direction: FlexDirection.Row,
-                alignItems: ItemAlign.Auto,
-                justifyContent: FlexAlign.SpaceAround
-            });
-        }, Flex);
+            Text.create('搜索设备');
+            Text.fontSize(22);
+            Text.fontColor({ "id": 16777256, "type": 10001, params: [], "bundleName": "com.amdm.newble", "moduleName": "entry" });
+        }, Text);
+        Text.pop();
         this.observeComponentCreation2((elmtId, isInitialRender) => {
             Button.createWithLabel("开始扫描");
             Button.onClick(async () => {
@@ -244,15 +245,28 @@ class Index extends ViewPU {
                 }
                 this.onGetGrantStatus(await getGrantStatus());
             });
+            Button.backgroundColor("#F0F7FF");
+            Button.padding(12);
+            Button.borderRadius(24);
+            Button.fontColor({ "id": 16777256, "type": 10001, params: [], "bundleName": "com.amdm.newble", "moduleName": "entry" });
+            Button.fontSize(16);
             Button.enabled(!this.bleScanning);
+            Button.borderRadius(20);
+            Button.width(200);
+            Button.height(40);
+            Button.padding({
+                left: 20,
+                right: 20,
+            });
+            Button.margin({
+                top: 15
+            });
         }, Button);
         Button.pop();
-        Flex.pop();
         this.observeComponentCreation2((elmtId, isInitialRender) => {
             List.create();
             List.width("90%");
-            List.backgroundColor("#ff93deff");
-            List.margin({ top: 30 });
+            List.margin({ top: 20 });
             List.height("90%");
         }, List);
         this.observeComponentCreation2((elmtId, isInitialRender) => {
@@ -273,7 +287,8 @@ class Index extends ViewPU {
                         ListItem.onClick(() => {
                             this.stopScan();
                             router.pushUrl({
-                                url: 'pages/Device',
+                                url: 'pages/BleControl',
+                                // url: 'pages/TabSwitchExample',
                                 params: item
                             }, err => {
                                 if (err) {
@@ -282,29 +297,47 @@ class Index extends ViewPU {
                                 }
                             });
                         });
-                        ListItem.margin(10);
-                        ListItem.padding(15);
-                        ListItem.border({ width: 1, color: Color.Black });
                     };
                     const deepRenderFunction = (elmtId, isInitialRender) => {
                         itemCreation(elmtId, isInitialRender);
                         this.observeComponentCreation2((elmtId, isInitialRender) => {
                             Row.create();
+                            Row.backgroundColor("#F0F7FF");
+                            Row.padding({
+                                left: 14,
+                                right: 14
+                            });
+                            Row.margin({ top: 10 });
                             Row.width('100%');
+                            Row.height(50);
                             Row.justifyContent(FlexAlign.SpaceBetween);
+                            Row.borderRadius(10);
                         }, Row);
                         this.observeComponentCreation2((elmtId, isInitialRender) => {
-                            Text.create(item.name.length > 0 ? item.name : "noname");
-                        }, Text);
-                        Text.pop();
+                            If.create();
+                            if (item.name.length > 0) {
+                                this.ifElseBranchUpdateFunction(0, () => {
+                                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                                        Text.create(item.name);
+                                        Text.fontSize(16);
+                                    }, Text);
+                                    Text.pop();
+                                });
+                            }
+                            // Text(item.rssi.toString()).fontSize(8)
+                            else {
+                                this.ifElseBranchUpdateFunction(1, () => {
+                                });
+                            }
+                        }, If);
+                        If.pop();
                         this.observeComponentCreation2((elmtId, isInitialRender) => {
-                            Text.create(item.rssi.toString());
-                        }, Text);
-                        Text.pop();
-                        this.observeComponentCreation2((elmtId, isInitialRender) => {
+                            // Text(item.rssi.toString()).fontSize(8)
                             Text.create(item.macAddress);
+                            // Text(item.rssi.toString()).fontSize(8)
                             Text.fontSize(8);
                         }, Text);
+                        // Text(item.rssi.toString()).fontSize(8)
                         Text.pop();
                         Row.pop();
                         ListItem.pop();

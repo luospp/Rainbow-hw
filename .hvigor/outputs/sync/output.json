@@ -1,4 +1,5 @@
 {
+  "version": 1,
   "ohos-module-entry": {
     "SELECT_TARGET": "default",
     "MODULE_BUILD_DIR": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/entry/build",
@@ -87,6 +88,8 @@
     "SELECT_PRODUCT_NAME": "default",
     "MODULE_BUILD_DIR": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/build",
     "BUNDLE_NAME": "com.amdm.newble",
+    "VERSION_CODE": 1,
+    "VERSION_NAME": "1.0.0",
     "BUILD_PATH": {
       "OUTPUT_PATH": "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper/build/outputs/default"
     },
@@ -131,11 +134,11 @@
             "material": {
               "certpath": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.cer",
               "keyAlias": "debugKey",
-              "keyPassword": "0000001BC968BA774C5ABA24AAF04200E12DB6BF53C133838B9E16302DDFF73DAFA45294D13854CB4A7424",
+              "keyPassword": "0000001BA767C061DE18E55481053B6C864FBCB5833F1866002E83A1895A528D21BB6E46383CE71C9E59E2",
               "profile": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.p7b",
               "signAlg": "SHA256withECDSA",
               "storeFile": "/Users/luoshipeng/.ohos/config/default_open_ble_helper_EcssRkGJj5HSavsJ_Dly73F9uMGxWHixQFcX92hfbHQ=.p12",
-              "storePassword": "0000001BDC41E12435D6DC8F6D8A8E9B7A2A6637613AFCFDB7DDDA9E94807CC398514D945281D89BE8D2A8"
+              "storePassword": "0000001B260788231BC56080A41BEC308F6FD893A712763DC4C6E91EF1C65B57054FF1E7D70E4650045CCA"
             }
           }
         ]
@@ -164,6 +167,5 @@
       "/Users/luoshipeng/DevEcoStudioProjects/open_ble_helper"
     ],
     "BUILD_CACHE_DIR": ""
-  },
-  "version": 1
+  }
 }

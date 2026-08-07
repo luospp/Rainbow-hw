@@ -1,13 +1,13 @@
 {
 	"app": {
 		"bundleName": "com.amdm.newble",
-		"vendor": "example",
+		"vendor": "AMDM",
 		"versionCode": 1,
 		"versionName": "1.0.0",
 		"icon": "$media:app_icon",
 		"label": "$string:app_name",
 		"apiReleaseType": "Release",
-		"compileSdkVersion": "6.0.0.47",
+		"compileSdkVersion": "6.1.0.105",
 		"targetAPIVersion": 50100018,
 		"minAPIVersion": 50000012,
 		"compileSdkType": "HarmonyOS",
@@ -37,7 +37,7 @@
 				"icon": "$media:layered_image",
 				"label": "$string:EntryAbility_label",
 				"startWindowIcon": "$media:startIcon",
-				"startWindowBackground": "$color:start_window_background",
+				"startWindowBackground": "$color:white",
 				"exported": true,
 				"skills": [
 					{

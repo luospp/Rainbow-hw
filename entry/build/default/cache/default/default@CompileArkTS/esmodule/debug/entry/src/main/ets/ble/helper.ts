@@ -5,9 +5,10 @@ import abilityAccessCtrl from "@ohos:abilityAccessCtrl";
 import type common from "@ohos:app.ability.common";
 import type Want from "@ohos:app.ability.Want";
 import bundleManager from "@ohos:bundle.bundleManager";
-import type { BusinessError as BusinessError } from "@ohos:base";
-import type { Callback as Callback } from "@ohos:base";
+import type { BusinessError } from "@ohos:base";
+import type { Callback } from "@ohos:base";
 import buffer from "@ohos:buffer";
+import util from "@ohos:util";
 export function getBleState(): access.BluetoothState {
     let bleState = access.BluetoothState.STATE_OFF;
     try {
@@ -210,16 +211,28 @@ const findTargetCharacteristic = (characteristicUUID: string): ble.BLECharacteri
 export const readCharacteristic = async (characteristicUUID: string): Promise<string | undefined> => {
     try {
         let result = await connectedDevice?.readCharacteristicValue(findTargetCharacteristic(characteristicUUID));
-        return arrayBufferToString(result?.characteristicValue);
+        // return arrayBufferToString(result?.characteristicValue)
+        return arrToStr(result?.characteristicValue);
     }
     catch (err) {
         console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
     }
 };
-export const writeCharacteristic = async (characteristicUUID: string, writeValue: string) => {
-    let targetCharacteristic = findTargetCharacteristic(characteristicUUID);
-    // 把writeValue按照每两个字符串分割后按照16进制转换为数字后写入
-    targetCharacteristic.characteristicValue = strToArrayBuffer(writeValue);
+// 发送音乐指令
+export const writeMusicCharacteristic = async (writeValue: string) => {
+    let targetCharacteristic = findTargetCharacteristic("FFF3");
+    targetCharacteristic.characteristicValue = strToBuffer(writeValue);
+    try {
+        await connectedDevice?.writeCharacteristicValue(targetCharacteristic, ble.GattWriteType.WRITE);
+    }
+    catch (err) {
+        console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
+    }
+};
+// 发送灯控指令
+export const writeLightCharacteristic = async (arr: Array<string>) => {
+    let targetCharacteristic = findTargetCharacteristic("FFF1");
+    targetCharacteristic.characteristicValue = convertToArrayBuffer(arr);
     try {
         await connectedDevice?.writeCharacteristicValue(targetCharacteristic, ble.GattWriteType.WRITE);
     }
@@ -235,3 +248,70 @@ export const subscribeCharacteristic = (characteristicUUID: string) => {
         console.error(`errCode: ${err.code}, errMessage: ${err.message}`);
     }
 };
+/**
+ * ASCII 解码：ArrayBuffer 转 String
+ * @param arrayBuffer 待解码的二进制缓冲区
+ * @returns 解码后的 ASCII 字符串（超出 ASCII 范围的字节会转为对应字符）
+ */
+function arrToStr(arrayBuffer: ArrayBuffer): string {
+    // 1. 将 ArrayBuffer 转为 Uint8Array 二进制视图，便于遍历字节
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let resultStr = "";
+    // 2. 遍历字节，将每个字节转为对应的 ASCII 字符
+    for (let i = 0; i < uint8Array.length; i++) {
+        // String.fromCharCode：将字节值（0-127）转为对应 ASCII 字符
+        resultStr += String.fromCharCode(uint8Array[i]);
+    }
+    return resultStr;
+}
+/**
+ *  ArrayBuffer 类型返回
+ * @param arr 字符串数组（如 ["[", "T", "0x00", "]"]）
+ * @returns ArrayBuffer 二进制缓冲区，转换失败返回 null
+ */
+function convertToArrayBuffer(arr: string[]): ArrayBuffer | null {
+    const byteList: number[] = []; // 先存储字节数值（0-255），后续转为 Uint8Array
+    for (const element of arr) {
+        let byteValue: number;
+        if (element.startsWith("0x")) {
+            // 处理十六进制字符串（如 "0x00" -> 0x00）
+            try {
+                // 截取 "0x" 后的部分，转为16进制整数
+                const hexStr = element.substring(2);
+                const intValue = parseInt(hexStr, 16);
+                // 验证字节范围（-128 ~ 127，对应 Byte 类型）
+                if (intValue < -128 || intValue > 255) {
+                    console.log(`超出字节范围的十六进制值：${element}`);
+                    return null;
+                }
+                // 转换为 Byte 对应的数值（处理无符号/有符号兼容）
+                byteValue = intValue > 127 ? intValue - 256 : intValue;
+            }
+            catch (e) {
+                console.log(`无效的十六进制值：${element}，异常信息：${e}`);
+                return null;
+            }
+        }
+        else {
+            // 处理普通字符（取第一个字符的 ASCII 码）
+            if (element.length === 0) {
+                console.log("空字符串无法转换为字节");
+                return null;
+            }
+            // 获取第一个字符的 ASCII 码，转为 Byte 类型
+            byteValue = element.charCodeAt(0) & 0xFF; // 确保在字节范围内
+        }
+        byteList.push(byteValue);
+    }
+    // 将字节数值列表转为 Uint8Array，再获取 ArrayBuffer 返回
+    const uint8Array = new Uint8Array(byteList);
+    return uint8Array.buffer;
+}
+function strToBuffer(str: string): ArrayBuffer {
+    // 1. 创建 TextEncoder 实例，默认编码为 UTF-8
+    const encoder = new util.TextEncoder();
+    // 2. 将字符串编码为 Uint8Array 字节数组
+    const uint8Array = encoder.encode(str);
+    // 3. 提取 Uint8Array 对应的 ArrayBuffer
+    return uint8Array.buffer;
+}

@@ -56,7 +56,7 @@ export class BleWriteDialog extends ViewPU {
             Column.padding({ top: 30, bottom: 30 });
         }, Column);
         this.observeComponentCreation2((elmtId, isInitialRender) => {
-            TextInput.create({ placeholder: "请输入16进制字符串" });
+            TextInput.create({ placeholder: "请输入16进制字符串", text: this.sentValue });
             TextInput.onChange((value: string) => {
                 this.sentValue = value;
             });
@@ -79,7 +79,7 @@ export class BleWriteDialog extends ViewPU {
         this.observeComponentCreation2((elmtId, isInitialRender) => {
             Button.createWithLabel('发送');
             Button.onClick(async () => {
-                this.controller.close();
+                // this.controller.close()
                 if (this.confirm) {
                     await this.confirm(this.sentValue);
                 }

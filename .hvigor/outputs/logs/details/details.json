@@ -2,11 +2,19 @@
   "HVIGOR_OHOS_PLUGIN": {
     "MODULES": [
       {
-        "MODULE_NAME": "1043bfc77febe75fafec0c4309faccf1",
-        "API_TYPE": "stageMode"
+        "MODULE_NAME": "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf",
+        "API_TYPE": "stageMode",
+        "INCLUDE_IN_BUILD": true,
+        "IS_COMMAND_LINE_ENTRY_MODULE": true,
+        "MODULE_TYPE": "entry",
+        "INCREMENTAL_TASKS": {
+          "COMPILE_ARKTS": true
+        },
+        "IS_INCREMENTAL_MODULE": true
       }
     ],
     "NATIVE_COMPILER": "Default",
+    "IS_FULL_BUILD": false,
     "BUILD_MODE": "debug"
   },
   "HVIGOR": {
@@ -15,47 +23,36 @@
     "IS_PARALLEL": true,
     "IS_HVIGORFILE_TYPE_CHECK": false,
     "TASK_TIME": {
-      "1043bfc77febe75fafec0c4309faccf1": {
-        "CreateModuleInfo": 433083,
-        "ConfigureCmake": 127750,
-        "PreCheckSyscap": 244959,
-        "GeneratePkgContextInfo": 1325584,
-        "ProcessIntegratedHsp": 307166,
-        "BuildNativeWithCmake": 107959,
-        "SyscapTransform": 7690834,
-        "ProcessStartupConfig": 536833,
-        "BuildNativeWithNinja": 285542,
-        "BuildJS": 653125,
-        "ProcessCompiledResources": 263250,
-        "PackingCheck": 2186791,
-        "CollectDebugSymbol": 293416,
-        "assembleHap": 99667
+      "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf": {
+        "CreateModuleInfo": 414167,
+        "ConfigureCmake": 132541,
+        "PreCheckSyscap": 223584,
+        "GeneratePkgContextInfo": 1367917,
+        "ProcessIntegratedHsp": 308875,
+        "BuildNativeWithCmake": 112166,
+        "SyscapTransform": 8203583,
+        "ProcessStartupConfig": 610458,
+        "BuildNativeWithNinja": 237500,
+        "GenerateLoaderJson": 4385833,
+        "BuildJS": 707375,
+        "CompileArkTS": 4206260292,
+        "ProcessCompiledResources": 353292,
+        "PackageHap": 343102708,
+        "PackingCheck": 3854417,
+        "SignHap": 893521750,
+        "CollectDebugSymbol": 444917,
+        "assembleHap": 159459
       }
     },
     "APIS": [
-      "getHvigorConfig",
-      "getRootNodeDescriptor",
-      "getChildNode",
-      "getNodeByName",
-      "getAllNodes",
-      "getRootNode",
-      "getNodeName",
-      "getStartParams",
-      "buildFinished",
-      "getNodePath",
-      "subNodes",
-      "getExtraOption",
-      "getExtParam",
-      "getExtParams",
-      "getProperty",
-      "getProperties",
-      "getParameter",
-      "getProductName",
-      "nodesEvaluated",
-      "getCommandEntryTask"
+      "getProperty"
     ],
+    "CONFIG_EXPERIMENT": {
+      "ENABLE_MODULE_SKIP": false,
+      "ENABLE_CPP_FUNCTION_LEVEL_INCREMENTAL": false
+    },
     "CONFIG_PROPERTIES": {},
-    "BUILD_ID": "202512221405163470",
-    "TOTAL_TIME": 977106417
+    "BUILD_ID": "202608031023208830",
+    "TOTAL_TIME": 6547913375
   }
 }

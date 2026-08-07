@@ -1,7 +1,7 @@
 {
   "app": {
     "bundleName": "com.amdm.newble",
-    "vendor": "example",
+    "vendor": "AMDM",
     "versionCode": 1,
     "versionName": "1.0.0",
     "icon": "$media:app_icon",
